@@ -20,7 +20,7 @@ database-free, and the CMS arrives underneath a site that is already live.
 ## Open questions
 
 - **Sign In Solutions end date and title.** The résumé shows "Feb 2019 – 2026" and "Senior
-  Full-Stack Software Engineer" — both to confirm in `apps/web/src/app/content/experience.ts`.
+  Full-Stack Software Engineer" — both to confirm in `apps/web/src/app/content/experience.ts`. Gateway's period ("2025") is also a placeholder in `projects.ts`.
 - **GitHub and LinkedIn links**, and an Open Graph share image (Phase 5).
 - **Hosting.** Deferred; everything is built container-first so any VPS works.
 
