@@ -60,10 +60,16 @@ jobs:
           sha=$(git rev-parse HEAD)
           echo "ref=${{ steps.ecr.outputs.registry }}/$REPOSITORY:$sha" >> "$GITHUB_OUTPUT"
           # Tags are immutable, so a SHA that was already built (a rollback or
-          # a re-run) is deployed as-is rather than rebuilt.
-          if aws ecr describe-images --repository-name "$REPOSITORY" \
-               --image-ids imageTag="$sha" >/dev/null 2>&1; then
+          # a re-run) is deployed as-is rather than rebuilt. Only "not found"
+          # means build; any other error stops the deploy instead of being
+          # mistaken for a missing image.
+          if err=$(aws ecr describe-images --repository-name "$REPOSITORY" \
+               --image-ids imageTag="$sha" 2>&1 >/dev/null); then
+            echo "Image for $sha already exists; skipping the build"
             echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif ! grep -q ImageNotFoundException <<<"$err"; then
+            echo "$err"
+            exit 1
           fi
 
       - if: steps.image.outputs.exists != 'true'

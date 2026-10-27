@@ -64,6 +64,16 @@ describe('FoundationStack', () => {
     });
   });
 
+  it('lets the deploy role check whether an image was already built', () => {
+    foundation.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Action: 'ecr:DescribeImages' }),
+        ]),
+      },
+    });
+  });
+
   it('keeps the IP and image repository if the stack is ever deleted', () => {
     foundation.hasResource('AWS::EC2::EIP', { DeletionPolicy: 'Retain' });
     foundation.hasResource('AWS::ECR::Repository', {

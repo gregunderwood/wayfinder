@@ -97,6 +97,10 @@ export class FoundationStack extends Stack {
     });
 
     this.repository.grantPullPush(deployRole);
+    // Lets a deploy see that a SHA was already built (a rollback or a
+    // re-run) and skip the build; tags are immutable, so pushing it again
+    // would fail.
+    this.repository.grant(deployRole, 'ecr:DescribeImages');
 
     deployRole.addToPolicy(
       new iam.PolicyStatement({
