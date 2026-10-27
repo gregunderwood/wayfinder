@@ -25,7 +25,7 @@ live site, and a static, database-free site is the simplest thing this project w
 ### Shape
 
 ```
-GitHub Actions ──(OIDC, no stored keys)──► ECR ──► EC2 t4g.small (us-west-2)
+GitHub Actions ──(OIDC, no stored keys)──► ECR ──► EC2 t4g.small (ca-central-1)
                                                    └─ Docker Compose
                                                       ├─ caddy  :80/:443, Let's Encrypt
                                                       └─ web    Angular SSR (Node 22)
@@ -52,7 +52,7 @@ DNS: underwoodstyles.ca + www ──► Elastic IP
 
 | Step   | What                                                                                                                                        | Who                           |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| 2.1    | **Account foundation:** root MFA, then lock root away; budget alarm; admin IAM user with MFA; region `us-west-2` (Oregon)                   | Greg in the console, guided   |
+| 2.1    | **Account foundation:** root MFA, then lock root away; budget alarm; admin IAM user with MFA; region `ca-central-1` (Canada Central)        | Greg in the console, guided   |
 | 2.2    | **Local access:** AWS CLI v2 installed under `/home` (root disk is tight), `aws login`, CDK bootstrap                                       | Greg signs in; Claude scripts |
 | 2.3 ✅ | **Container:** `Dockerfile.web` (multi-stage, non-root), `docker-compose.yml`, `Caddyfile` (apex + www → apex, security headers)            | Claude                        |
 | 2.4    | **Infrastructure:** CDK stack — EC2 + Elastic IP + security group, instance role (SSM, ECR pull), ECR repo, GitHub OIDC role, Route 53 zone | Claude writes, Greg approves  |
