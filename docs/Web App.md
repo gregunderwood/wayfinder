@@ -66,6 +66,10 @@ Inline SVG only. An icon font is a render-blocking request for a handful of glyp
 
 - **A new host (staging, a preview URL) silently loses SSR** until it is in `allowedHosts` or
   `NG_ALLOWED_HOSTS` — in Angular 20 it falls back to client rendering with only a log line.
+- **`nx serve web --host=<x>` allows only `<x>`.** In dev the allow-list is rebuilt from the serve
+  `host` (plus any serve `allowedHosts`), ignoring the build's list, so `--host=0.0.0.0` makes
+  `localhost` answer 400. To reach the dev server from another device, add that host to the
+  serve target's `allowedHosts`.
 - **Taglines double as meta descriptions.** `content.spec.ts` fails one over 160 characters.
 
 ## When to update this file
