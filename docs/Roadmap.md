@@ -19,7 +19,9 @@ database-free, and the CMS arrives underneath a site that is already live.
 
 ## Open questions
 
-- **Résumé content past 2022.** The source résumé stops at Traction Guest (2019 - present as of 2022).
+- **Sign In Solutions end date and title.** The résumé shows "Feb 2019 – 2026" and "Senior
+  Full-Stack Software Engineer" — both to confirm in `apps/web/src/app/content/experience.ts`.
+- **GitHub and LinkedIn links**, and an Open Graph share image (Phase 5).
 - **Hosting.** Deferred; everything is built container-first so any VPS works.
 
 ## When to update this file

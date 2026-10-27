@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://underwoodstyles.ca/sitemap.xml

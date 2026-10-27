@@ -7,6 +7,7 @@ import {
 import express from 'express';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildSitemap, sitemapPaths } from './app/core/sitemap';
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
@@ -15,16 +16,12 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
- *
- * Example:
- * ```ts
- * app.get('/api/**', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * Generated from the content on every request, so it can never list a page
+ * that does not exist or miss one that does.
  */
+app.get('/sitemap.xml', (_req, res) => {
+  res.type('application/xml').send(buildSitemap(sitemapPaths()));
+});
 
 /**
  * Serve static files from /browser

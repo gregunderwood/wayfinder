@@ -16,15 +16,31 @@ and, under `/admin`, the CMS.
 ### Layout
 
 ```
-core/      api.service.ts (the only HTTP client), api-error.interceptor.ts, auth/, seo.service.ts
-features/  home, about, work, blog, testimonials, contact, resume, admin/*
-shared/    small presentational pieces
+core/      site.config.ts (identity + SITE_URL), seo.service.ts, structured-data.ts, sitemap.ts, markdown.ts
+content/   hardcoded projects, skills and résumé — typed against @wayfinder/domain where the CMS will serve them
+features/  home, about, work (list + detail), resume, not-found; admin/* arrives with the CMS
+shared/    project-card, skill-matrix
 ```
+
+Zoneless (`provideZonelessChangeDetection`), every component `OnPush`, every route lazy-loaded.
+Styling is one hand-written `styles.scss` of tokens and a few shared classes; component `styles:`
+hold only what is specific to that component. Dark mode is a token swap under
+`prefers-color-scheme`, and print styles make `/resume` a usable PDF.
 
 ### Routes
 
 Public: `/` · `/about` · `/work` · `/work/:slug` · `/blog` · `/blog/:slug` · `/blog/tag/:tag` ·
 `/testimonials` · `/contact` · `/resume`. Admin: `/admin/*`, guarded, `noindex`, `RenderMode.Client`.
+
+### Rendering
+
+Every public route is prerendered at build time (`app.routes.server.ts`); `/work/:slug` takes its
+params from the content. Unknown paths render per request and answer a real **404** — the
+catch-all route sets `status: 404`, and an unknown project slug sets it through `RESPONSE_INIT`.
+`/sitemap.xml` is served by the Express host in `server.ts`, generated from the same content.
+
+The SSR host only renders for hosts in `security.allowedHosts` (`project.json`); any other `Host`
+header gets a 400 (Angular's SSRF guard). Override per environment with `NG_ALLOWED_HOSTS`.
 
 ### SEO
 
@@ -45,6 +61,12 @@ Prerender runs in Node; a bare `window` access fails the build.
 ### ❌ No icon font
 
 Inline SVG only. An icon font is a render-blocking request for a handful of glyphs.
+
+## Pitfalls
+
+- **A new host (staging, a preview URL) silently loses SSR** until it is in `allowedHosts` or
+  `NG_ALLOWED_HOSTS` — in Angular 20 it falls back to client rendering with only a log line.
+- **Taglines double as meta descriptions.** `content.spec.ts` fails one over 160 characters.
 
 ## When to update this file
 
