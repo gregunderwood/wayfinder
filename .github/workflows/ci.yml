@@ -29,3 +29,49 @@ jobs:
       - run: npx nx format:check
       - run: npx nx affected -t lint test build
       - run: npx nx test server --coverage
+
+  # Builds the production image and runs it behind Caddy exactly as the host
+  # will, so a broken Dockerfile, compose file or Caddyfile fails here rather
+  # than on deploy.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -f Dockerfile.web -t wayfinder-web:ci .
+
+      - name: Start the stack behind Caddy
+        env:
+          WEB_IMAGE: wayfinder-web:ci
+          # localhost makes Caddy use its internal CA instead of Let's Encrypt.
+          SITE_DOMAIN: localhost
+          ACME_EMAIL: ci@example.com
+        run: docker compose up -d --wait --wait-timeout 90
+
+      - name: Smoke test
+        run: |
+          expect() {
+            code=$(curl -sk -o /dev/null -w '%{http_code}' "$2")
+            echo "$code $2"
+            [ "$code" = "$1" ] || { echo "expected $1"; exit 1; }
+          }
+          expect 200 https://localhost/
+          expect 200 https://localhost/work/gateway
+          expect 200 https://localhost/sitemap.xml
+          expect 404 https://localhost/no-such-page
+          expect 308 http://localhost/
+          headers=$(curl -skI https://localhost/)
+          echo "$headers" | grep -qi '^strict-transport-security:' || { echo 'missing HSTS'; exit 1; }
+          if echo "$headers" | grep -qi '^x-powered-by:'; then echo 'x-powered-by leaked'; exit 1; fi
+
+      - name: Logs on failure
+        if: failure()
+        env:
+          WEB_IMAGE: wayfinder-web:ci
+          SITE_DOMAIN: localhost
+          ACME_EMAIL: ci@example.com
+        run: docker compose logs
+
+      - name: Image size
+        run: docker image ls wayfinder-web:ci

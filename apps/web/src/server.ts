@@ -13,6 +13,8 @@ const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
 
 const app = express();
+// Advertising the framework only helps someone looking for a known exploit.
+app.disable('x-powered-by');
 const angularApp = new AngularNodeAppEngine();
 
 /**

@@ -1,0 +1,13 @@
+# Everything the image rebuilds itself, plus anything that must never be
+# copied into a build context.
+node_modules
+dist
+tmp
+coverage
+.nx
+.angular
+.git
+.github
+.vscode
+**/.env
+**/*.log
