@@ -1,6 +1,7 @@
-# Production stack for one host. The deploy pipeline sets WEB_IMAGE to an
-# immutable, SHA-tagged image; SITE_DOMAIN and ACME_EMAIL come from the host's
-# .env next to this file. The API and Postgres join here in Phase 3.
+# Production stack for one host. The deploy pipeline writes WEB_IMAGE (an
+# immutable, SHA-tagged image) and SITE_DOMAIN to the .env next to this file.
+# No ACME email is set: Let's Encrypt no longer sends expiry notices, and
+# Caddy renews on its own. The API and Postgres join here in Phase 3.
 
 services:
   web:
@@ -41,7 +42,6 @@ services:
       - '443:443/udp' # HTTP/3
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN, e.g. underwoodstyles.ca}
-      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL for Let's Encrypt expiry notices}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Certificates live here. Losing this volume means re-issuing, and Let's

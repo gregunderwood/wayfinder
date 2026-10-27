@@ -1,0 +1,83 @@
+name: Deploy
+
+# Runs after CI passes on main. Run it by hand with a commit SHA to roll back
+# (or forward) to any image that has been built before.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to deploy (defaults to the tip of main)
+        required: false
+
+permissions:
+  contents: read
+  # Lets the job request a GitHub OIDC token to exchange for AWS credentials;
+  # no AWS keys are stored in the repository.
+  id-token: write
+
+# One deploy at a time, and never cancel one mid-rollout.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ca-central-1
+  REPOSITORY: wayfinder/web
+  SITE_DOMAIN: underwoodstyles.ca
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # The host is Graviton, so the image is built natively on arm64.
+    runs-on: ubuntu-24.04-arm
+    # The AWS deploy role trusts only jobs in this environment.
+    environment:
+      name: production
+      url: https://underwoodstyles.ca
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image
+        id: image
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "ref=${{ steps.ecr.outputs.registry }}/$REPOSITORY:$sha" >> "$GITHUB_OUTPUT"
+          # Tags are immutable, so a SHA that was already built (a rollback or
+          # a re-run) is deployed as-is rather than rebuilt.
+          if aws ecr describe-images --repository-name "$REPOSITORY" \
+               --image-ids imageTag="$sha" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.image.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - if: steps.image.outputs.exists != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.web
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Roll out
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: .github/scripts/deploy-to-host.sh

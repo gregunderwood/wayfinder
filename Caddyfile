@@ -1,7 +1,3 @@
-{
-	email {$ACME_EMAIL}
-}
-
 # One canonical origin. Search engines treat www and apex as two sites unless
 # one permanently redirects to the other.
 www.{$SITE_DOMAIN} {

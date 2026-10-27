@@ -11,3 +11,4 @@ coverage
 .vscode
 **/.env
 **/*.log
+infra/cdk.out

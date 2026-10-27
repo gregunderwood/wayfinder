@@ -46,7 +46,6 @@ jobs:
           WEB_IMAGE: wayfinder-web:ci
           # localhost makes Caddy use its internal CA instead of Let's Encrypt.
           SITE_DOMAIN: localhost
-          ACME_EMAIL: ci@example.com
         run: docker compose up -d --wait --wait-timeout 90
 
       - name: Smoke test
@@ -70,7 +69,6 @@ jobs:
         env:
           WEB_IMAGE: wayfinder-web:ci
           SITE_DOMAIN: localhost
-          ACME_EMAIL: ci@example.com
         run: docker compose logs
 
       - name: Image size
