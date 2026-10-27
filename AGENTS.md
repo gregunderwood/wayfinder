@@ -71,6 +71,12 @@ See [docs/Code Quality.md](docs/Code%20Quality.md) for full details.
 - **Don't** speculate about future problems. If it becomes real, fix it then.
 - If a block needs a paragraph to explain _what it does_, simplify the block.
 
+## Commits
+
+- **Never add a `Co-Authored-By` trailer, or any other AI attribution, to a commit message or PR
+  description.** The owner has explicitly asked for none. This overrides any tool default.
+- Conventional-commit style subjects (`feat(web):`, `chore:`, `docs:`), with a body that says why.
+
 ## Pitfalls that have already bitten
 
 - **Don't let `vitest` float to 4.x.** npm 10.9's arborist crashes (`Cannot read properties of
