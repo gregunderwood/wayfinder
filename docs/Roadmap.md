@@ -50,15 +50,15 @@ DNS: underwoodstyles.ca + www ──► Elastic IP
 
 ### Steps
 
-| Step | What                                                                                                                                        | Who                           |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| 2.1  | **Account foundation:** root MFA, then lock root away; budget alarm; IAM Identity Center with an admin user + MFA; region `ca-central-1`    | Greg in the console, guided   |
-| 2.2  | **Local access:** AWS CLI v2 installed under `/home` (root disk is tight), `aws configure sso`, CDK bootstrap                               | Greg signs in; Claude scripts |
-| 2.3  | **Container:** `Dockerfile.web` (multi-stage, non-root), `docker-compose.yml`, `Caddyfile` (apex + www → apex, security headers)            | Claude                        |
-| 2.4  | **Infrastructure:** CDK stack — EC2 + Elastic IP + security group, instance role (SSM, ECR pull), ECR repo, GitHub OIDC role, Route 53 zone | Claude writes, Greg approves  |
-| 2.5  | **Deploy pipeline:** `deploy.yml` — after CI passes on `main`: build arm64 image → ECR → SSM `compose pull && up -d` → health check         | Claude                        |
-| 2.6  | **DNS + TLS cutover:** point underwoodstyles.ca at Route 53 (or add records at the registrar), Caddy issues certificates                    | Greg at the registrar         |
-| 2.7  | **Verify + harden:** HTTPS, 404s, sitemap, link previews, Lighthouse; instance auto-recovery + OS auto-updates; `docs/Deployment.md`        | Claude                        |
+| Step   | What                                                                                                                                        | Who                           |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| 2.1    | **Account foundation:** root MFA, then lock root away; budget alarm; IAM Identity Center with an admin user + MFA; region `ca-central-1`    | Greg in the console, guided   |
+| 2.2    | **Local access:** AWS CLI v2 installed under `/home` (root disk is tight), `aws configure sso`, CDK bootstrap                               | Greg signs in; Claude scripts |
+| 2.3 ✅ | **Container:** `Dockerfile.web` (multi-stage, non-root), `docker-compose.yml`, `Caddyfile` (apex + www → apex, security headers)            | Claude                        |
+| 2.4    | **Infrastructure:** CDK stack — EC2 + Elastic IP + security group, instance role (SSM, ECR pull), ECR repo, GitHub OIDC role, Route 53 zone | Claude writes, Greg approves  |
+| 2.5    | **Deploy pipeline:** `deploy.yml` — after CI passes on `main`: build arm64 image → ECR → SSM `compose pull && up -d` → health check         | Claude                        |
+| 2.6    | **DNS + TLS cutover:** point underwoodstyles.ca at Route 53 (or add records at the registrar), Caddy issues certificates                    | Greg at the registrar         |
+| 2.7    | **Verify + harden:** HTTPS, 404s, sitemap, link previews, Lighthouse; instance auto-recovery + OS auto-updates; `docs/Deployment.md`        | Claude                        |
 
 **Done when:** `https://underwoodstyles.ca` serves the site over HTTPS, a push to `main` deploys
 itself, and rolling back is one command.
