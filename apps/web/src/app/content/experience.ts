@@ -35,7 +35,7 @@ export const ROLES: Role[] = [
     summary:
       'Lead developer on an enterprise visitor-management platform, owning features from architecture and proof of concept through CI, testing and living documentation.',
     highlights: [
-      'Built an OAuth 2.0 authorization server on top of AWS Cognito, giving the product suite one sign-in.',
+      'One of two primary developers of Gateway, the suite’s single sign-on portal: an OAuth 2.0 authorization server on AWS Cognito with SAML SSO, MFA and per-product access.',
       'Designed asynchronous service-to-service messaging on AWS SNS topics and SQS queues.',
       'Worked on the access control integration, connecting visitor management to physical access systems.',
       'Drove AI adoption across the organization: wiring AI into products, documentation and developer environments.',

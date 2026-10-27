@@ -6,6 +6,42 @@ import { ProjectKind, type Project } from '@wayfinder/domain';
  */
 export const PROJECTS: Project[] = [
   {
+    slug: 'gateway',
+    name: 'Gateway',
+    tagline:
+      'The single sign-on portal for the Sign In Solutions product suite: one login, SAML SSO, MFA and per-product access, on OAuth over AWS Cognito.',
+    kind: ProjectKind.Employment,
+    role: 'One of two primary developers',
+    period: '2025',
+    stack: ['OAuth 2.0', 'AWS Cognito', 'SAML 2.0', 'MFA'],
+    docsUrl:
+      'https://help.signinsolutions.com/en/articles/12694425-how-to-use-the-gateway-portal',
+    featured: true,
+    sortOrder: 0,
+    bodyMarkdown: `
+Gateway is the front door to the Sign In Solutions product suite. An organization signs in once
+and reaches every product it licenses — visitor management, compliance and the rest — with the
+same credentials. I was one of its two primary developers.
+
+## What it does
+
+- **One login across the suite.** The same credentials work in every product.
+- **SAML single sign-on.** An organization's admins connect their own identity provider and
+  prove they own their email domain with a DNS TXT record before it is trusted.
+- **Security policy per organization**: multi-factor authentication on, off or optional, and a
+  minimum password length.
+- **Per-product access**, granted directly or mapped from SAML group attributes, so access can be
+  managed in the customer's own identity provider.
+- **User provisioning** through SSO or by hand, with each product applying its own default role.
+
+## How it is built
+
+An OAuth 2.0 authorization server layered over AWS Cognito. Cognito holds the identities; Gateway
+adds what an enterprise suite needs on top of it — organization-level identity providers,
+verified domains, security policy and product entitlements.
+`,
+  },
+  {
     slug: 'lvcc',
     name: 'Lardeau Valley Community Centre',
     tagline:
@@ -144,7 +180,7 @@ export function projectsInOrder(): Project[] {
 }
 
 export const PROJECT_KIND_LABELS: Record<ProjectKind, string> = {
-  [ProjectKind.Employment]: 'Client work',
+  [ProjectKind.Employment]: 'Professional',
   [ProjectKind.Volunteer]: 'Volunteer',
   [ProjectKind.Personal]: 'Personal',
 };

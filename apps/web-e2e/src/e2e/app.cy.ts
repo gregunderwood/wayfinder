@@ -4,6 +4,7 @@
 const PAGES = [
   { path: '/', heading: /full-stack software engineer/i },
   { path: '/work', heading: /things i’ve built/i },
+  { path: '/work/gateway', heading: /gateway/i },
   { path: '/work/lvcc', heading: /lardeau valley community centre/i },
   { path: '/about', heading: /a generalist, on purpose/i },
   { path: '/resume', heading: /greg underwood/i },

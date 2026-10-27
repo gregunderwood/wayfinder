@@ -13,9 +13,8 @@ import { ProjectCard } from '../../shared/project-card';
       <p class="eyebrow">Work</p>
       <h1>Things I’ve built</h1>
       <p class="lead">
-        Systems I designed and wrote end to end. My employment history — OAuth
-        on Cognito, AWS messaging, a long AngularJS migration — is on the
-        <a routerLink="/resume">résumé</a>.
+        Systems I designed and wrote — at work, as a volunteer, and for myself.
+        The rest of my history is on the <a routerLink="/resume">résumé</a>.
       </p>
     </header>
     <section class="wrap section">
@@ -34,7 +33,7 @@ export class WorkList {
     inject(SeoService).set({
       title: 'Work',
       description:
-        'Projects by Greg Underwood: a community-centre platform with AI-drafted meeting minutes, a multi-node greenhouse controller, and this site.',
+        'Projects by Greg Underwood: the Gateway single sign-on portal, a community-centre platform with AI-drafted meeting minutes, and a multi-node greenhouse controller.',
       path: '/work',
     });
   }

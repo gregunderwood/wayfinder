@@ -34,6 +34,16 @@ import { projectJsonLd } from '../../core/structured-data';
               <dt>When</dt>
               <dd>{{ project.period }}</dd>
             </div>
+            @if (project.docsUrl) {
+              <div>
+                <dt>Docs</dt>
+                <dd>
+                  <a [href]="project.docsUrl" rel="noopener">{{
+                    displayHost(project.docsUrl)
+                  }}</a>
+                </dd>
+              </div>
+            }
             @if (project.liveUrl) {
               <div>
                 <dt>Live</dt>

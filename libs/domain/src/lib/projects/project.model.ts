@@ -20,6 +20,8 @@ export interface Project {
   bodyMarkdown: string;
   liveUrl?: string;
   repoUrl?: string;
+  /** Public documentation, for work whose live product sits behind a login. */
+  docsUrl?: string;
   featured: boolean;
   sortOrder: number;
 }
