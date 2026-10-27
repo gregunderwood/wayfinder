@@ -72,6 +72,18 @@ describe('FoundationStack', () => {
     });
   });
 
+  it('sends budget alerts to the alerts topic', () => {
+    foundation.hasResourceProperties('AWS::Budgets::Budget', {
+      Budget: Match.objectLike({ BudgetLimit: { Amount: 30, Unit: 'USD' } }),
+      NotificationsWithSubscribers: Match.arrayWith([
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'FORECASTED' }),
+          Subscribers: [Match.objectLike({ SubscriptionType: 'SNS' })],
+        }),
+      ]),
+    });
+  });
+
   it('restricts certificate issuance to Let’s Encrypt', () => {
     foundation.hasResourceProperties('AWS::Route53::RecordSet', {
       Type: 'CAA',

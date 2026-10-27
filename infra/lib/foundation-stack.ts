@@ -7,6 +7,7 @@ import {
   StackProps,
   Validations,
 } from 'aws-cdk-lib';
+import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -156,6 +157,48 @@ export class FoundationStack extends Stack {
       id: 'AwsSolutions::AwsSolutions-SNS2',
       reason:
         'Carries alarm state changes only, nothing sensitive; a customer managed KMS key would cost more than the rest of the alerting.',
+    });
+
+    // The expected bill is about US$20 a month. Warn at 80% of the budget
+    // actually spent, and as soon as the month is forecast to exceed it, so a
+    // runaway resource is caught days in rather than on the invoice.
+    alerts.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowBudgetsToPublish',
+        principals: [new iam.ServicePrincipal('budgets.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [alerts.topicArn],
+        conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      }),
+    );
+    const subscribers = [{ subscriptionType: 'SNS', address: alerts.topicArn }];
+    new budgets.CfnBudget(this, 'MonthlyBudget', {
+      budget: {
+        budgetName: 'wayfinder-monthly',
+        budgetType: 'COST',
+        timeUnit: 'MONTHLY',
+        budgetLimit: { amount: CONFIG.monthlyBudgetUsd, unit: 'USD' },
+      },
+      notificationsWithSubscribers: [
+        {
+          notification: {
+            notificationType: 'ACTUAL',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 80,
+            thresholdType: 'PERCENTAGE',
+          },
+          subscribers,
+        },
+        {
+          notification: {
+            notificationType: 'FORECASTED',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 100,
+            thresholdType: 'PERCENTAGE',
+          },
+          subscribers,
+        },
+      ],
     });
 
     new CfnOutput(this, 'NameServers', {

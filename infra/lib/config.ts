@@ -18,6 +18,8 @@ export const CONFIG = {
     environment: 'production',
   },
   instanceType: 't4g.small',
+  /** Alerts at 80% spent and when the month is forecast to go over. */
+  monthlyBudgetUsd: 30,
   /**
    * Deploys find the host by this tag, and the deploy role may only run
    * commands on instances carrying it. That indirection keeps the CI role from
