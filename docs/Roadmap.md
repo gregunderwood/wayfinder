@@ -39,7 +39,7 @@ DNS: underwoodstyles.ca + www ──► Elastic IP
 - **Caddy** terminates TLS and renews certificates itself. Security group opens 80 and 443 only.
 - **No SSH.** Shell access and deploys go through SSM (Session Manager / Run Command), so port 22
   is never open and there is no key to lose.
-- **No long-lived AWS keys anywhere.** Humans sign in through IAM Identity Center with MFA; GitHub
+- **No long-lived AWS keys anywhere.** Greg signs in as an MFA-protected IAM user, and the CLI uses `aws login` short-lived credentials; GitHub
   Actions assumes a role through OIDC, scoped to `gregunderwood/wayfinder` on `main`; the
   instance pulls from ECR through its instance role.
 - **Images build in CI, not on the dev box** — on GitHub's arm64 runners, tagged by git SHA.
@@ -50,15 +50,15 @@ DNS: underwoodstyles.ca + www ──► Elastic IP
 
 ### Steps
 
-| Step   | What                                                                                                                                           | Who                           |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| 2.1    | **Account foundation:** root MFA, then lock root away; budget alarm; IAM Identity Center with an admin user + MFA; region `us-west-2` (Oregon) | Greg in the console, guided   |
-| 2.2    | **Local access:** AWS CLI v2 installed under `/home` (root disk is tight), `aws configure sso`, CDK bootstrap                                  | Greg signs in; Claude scripts |
-| 2.3 ✅ | **Container:** `Dockerfile.web` (multi-stage, non-root), `docker-compose.yml`, `Caddyfile` (apex + www → apex, security headers)               | Claude                        |
-| 2.4    | **Infrastructure:** CDK stack — EC2 + Elastic IP + security group, instance role (SSM, ECR pull), ECR repo, GitHub OIDC role, Route 53 zone    | Claude writes, Greg approves  |
-| 2.5    | **Deploy pipeline:** `deploy.yml` — after CI passes on `main`: build arm64 image → ECR → SSM `compose pull && up -d` → health check            | Claude                        |
-| 2.6    | **DNS + TLS cutover:** point underwoodstyles.ca at Route 53 (or add records at the registrar), Caddy issues certificates                       | Greg at the registrar         |
-| 2.7    | **Verify + harden:** HTTPS, 404s, sitemap, link previews, Lighthouse; instance auto-recovery + OS auto-updates; `docs/Deployment.md`           | Claude                        |
+| Step   | What                                                                                                                                        | Who                           |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| 2.1    | **Account foundation:** root MFA, then lock root away; budget alarm; admin IAM user with MFA; region `us-west-2` (Oregon)                   | Greg in the console, guided   |
+| 2.2    | **Local access:** AWS CLI v2 installed under `/home` (root disk is tight), `aws login`, CDK bootstrap                                       | Greg signs in; Claude scripts |
+| 2.3 ✅ | **Container:** `Dockerfile.web` (multi-stage, non-root), `docker-compose.yml`, `Caddyfile` (apex + www → apex, security headers)            | Claude                        |
+| 2.4    | **Infrastructure:** CDK stack — EC2 + Elastic IP + security group, instance role (SSM, ECR pull), ECR repo, GitHub OIDC role, Route 53 zone | Claude writes, Greg approves  |
+| 2.5    | **Deploy pipeline:** `deploy.yml` — after CI passes on `main`: build arm64 image → ECR → SSM `compose pull && up -d` → health check         | Claude                        |
+| 2.6    | **DNS + TLS cutover:** point underwoodstyles.ca at Route 53 (or add records at the registrar), Caddy issues certificates                    | Greg at the registrar         |
+| 2.7    | **Verify + harden:** HTTPS, 404s, sitemap, link previews, Lighthouse; instance auto-recovery + OS auto-updates; `docs/Deployment.md`        | Claude                        |
 
 **Done when:** `https://underwoodstyles.ca` serves the site over HTTPS, a push to `main` deploys
 itself, and rolling back is one command.
@@ -72,8 +72,8 @@ itself, and rolling back is one command.
 
 ## Open questions
 
-- **Where underwoodstyles.ca is registered** — decides whether DNS moves to Route 53 or stays
-  at the registrar.
+- **DNS:** underwoodstyles.ca is registered at **Namecheap**; the plan is a Route 53 hosted zone with
+  Namecheap pointed at its nameservers (step 2.6).
 - **Sign In Solutions end date and title.** The résumé shows "Feb 2019 – 2026" and "Senior
   Full-Stack Software Engineer" — both to confirm in `apps/web/src/app/content/experience.ts`.
   Gateway's period ("2025") is also a placeholder in `projects.ts`.
