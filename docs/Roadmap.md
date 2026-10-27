@@ -7,15 +7,16 @@ database-free, Phase 2 deploys it, and the CMS arrives underneath a site that is
 
 ## Status
 
-| Phase | Outcome                                                                                                      | State    |
-| ----- | ------------------------------------------------------------------------------------------------------------ | -------- |
-| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                 | **Done** |
-| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS | **Done** |
-| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                     | **Done** |
-| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                    | Next     |
-| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                      |          |
-| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                          |          |
-| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                |          |
+| Phase | Outcome                                                                                                            | State    |
+| ----- | ------------------------------------------------------------------------------------------------------------------ | -------- |
+| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done** |
+| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done** |
+| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done** |
+| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | Next     |
+| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |          |
+| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |          |
+| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |          |
+| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |          |
 
 Deployment moved up from last to Phase 2: a repo that is public and on a résumé should point at a
 live site, and a static, database-free site is the simplest thing this project will ever deploy.
@@ -69,6 +70,39 @@ itself, and rolling back is one command.
   cache. Uploads arrive in Phase 6 and go to S3 then.
 - **A database.** Phase 3.
 - **Email.** SES arrives with the contact form in Phase 5.
+
+## Phase 7 — Starter
+
+The Phase 2 stack (a site on the owner's own AWS account, with no stored keys, self-healing, alerts,
+rollback and cdk-nag in CI) is useful beyond this site. `starter/aws-site` is a snapshot of it at
+the end of Phase 2. It is scheduled after Phase 3 because a site plus a CMS is what someone would
+pay for; a bare site competes with free tiers on Vercel, Netlify and Amplify.
+
+### Steps
+
+| Step | What                                                                                                                                                                                                                                                                   |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7.1  | **One config file** (`site.config.json`): domain, AWS account and region, repo, budget, instance size. Infra, both workflows, Angular `allowedHosts` and the SEO config read it; today the domain alone is set in five places.                                         |
+| 7.2  | **`npm run setup`**: asks for the domain and AWS profile; discovers the account ID and the repo's OIDC subject; bootstraps CDK in both regions; deploys; creates the GitHub `production` environment and variable; subscribes the alert email; prints the nameservers. |
+| 7.3  | **Example content** in place of Greg's; mark the repo as a GitHub template.                                                                                                                                                                                            |
+| 7.4  | **Docs for what AWS will not automate:** account creation, root MFA, registrar nameservers.                                                                                                                                                                            |
+
+**Structure:** the starter becomes the upstream and underwoodstyles.ca a fork of it, so fixes flow
+from starter to site and nothing personal leaks the other way. Decide before Phase 3 adds much to
+`main`, or the split gets harder.
+
+### Business models (to test, not decided)
+
+| Model                                      | Notes                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| One-time boilerplate license, US$99–299    | Most likely first step; low support load                                              |
+| Open core: free starter, paid CMS "Pro"    | Keeps the portfolio value of a public repo; pairs with the license                    |
+| Done-for-you setup in the client's account | US$500–1,500 per setup; revenue now, and shows what to productize                     |
+| Customer-owned plus paid support/updates   | US$10–20/month recurring without hosting other people's sites                         |
+| Managed hosting subscription               | Least attractive solo: on call for others' uptime, and competing with Vercel on price |
+
+The repo stays open source while Greg is job hunting; a public, well-built repo is worth more
+than early sales.
 
 ## Open questions
 
