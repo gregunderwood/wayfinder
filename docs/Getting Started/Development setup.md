@@ -4,7 +4,7 @@
 
 - **Node 22** via nvm: `nvm install && nvm use` in the repo root reads `.nvmrc`.
 - npm 10 (ships with Node 22).
-- Postgres and Docker arrive with the CMS phases; Phase 1 needs neither.
+- Docker is not needed locally: images build in CI. Postgres arrives with the CMS in Phase 3.
 
 ## First run
 
