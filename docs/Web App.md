@@ -70,6 +70,10 @@ Inline SVG only. An icon font is a render-blocking request for a handful of glyp
   `host` (plus any serve `allowedHosts`), ignoring the build's list, so `--host=0.0.0.0` makes
   `localhost` answer 400. To reach the dev server from another device, add that host to the
   serve target's `allowedHosts`.
+- **Behind a proxy, untrusted `X-Forwarded-*` headers make Angular fall back to client-side
+  rendering** — every 404 becomes a 200, with only a log line. `server.ts` trusts them because
+  Caddy is the only ingress; if anything else ever fronts the app, revisit that. The CI
+  container job asserts the 404 through Caddy so this cannot regress silently.
 - **Taglines double as meta descriptions.** `content.spec.ts` fails one over 160 characters.
 
 ## When to update this file

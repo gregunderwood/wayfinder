@@ -15,7 +15,17 @@ const browserDistFolder = resolve(serverDistFolder, '../browser');
 const app = express();
 // Advertising the framework only helps someone looking for a known exploit.
 app.disable('x-powered-by');
-const angularApp = new AngularNodeAppEngine();
+// Caddy is the only way in: this port is never published, and Caddy replaces
+// any X-Forwarded-* a client sends with its own. Left untrusted, Angular falls
+// back to client-side rendering whenever these headers are present, which
+// turns every 404 behind the proxy into a soft 200.
+const angularApp = new AngularNodeAppEngine({
+  trustProxyHeaders: [
+    'x-forwarded-for',
+    'x-forwarded-proto',
+    'x-forwarded-host',
+  ],
+});
 
 /**
  * Generated from the content on every request, so it can never list a page
