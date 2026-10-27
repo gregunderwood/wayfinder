@@ -1,4 +1,4 @@
-# @portfolio/domain
+# @wayfinder/domain
 
 The shared contract between `apps/web` and `apps/server`: interfaces, enums and consts only.
 The invariant is stated at the top of [src/index.ts](src/index.ts) and enforced by the module

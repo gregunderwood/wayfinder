@@ -25,7 +25,7 @@ export default [
               onlyDependOnLibsWithTags: ['type:domain'],
             },
             {
-              // The invariant that lets @portfolio/domain be imported by both
+              // The invariant that lets @wayfinder/domain be imported by both
               // the browser bundle and the API: interfaces, enums and consts
               // only. A decorator or an rxjs import here would drag a server
               // or framework runtime into the other side's build.

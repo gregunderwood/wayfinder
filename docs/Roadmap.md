@@ -19,8 +19,7 @@ database-free, and the CMS arrives underneath a site that is already live.
 
 ## Open questions
 
-- **The production domain.** Everything SEO-facing reads from `APP_URL`; until it is known it
-  holds a placeholder.
+- **Résumé content past 2022.** The source résumé stops at Traction Guest (2019 - present as of 2022).
 - **Hosting.** Deferred; everything is built container-first so any VPS works.
 
 ## When to update this file

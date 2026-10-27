@@ -2,7 +2,7 @@
 
 ## What it is
 
-`apps/web`: Angular 20, standalone, SSR + prerender. Selector prefix `gu-`. Serves the public site
+`apps/web`: Angular 20, standalone, SSR + prerender. Selector prefix `wf-`. Serves the public site
 and, under `/admin`, the CMS.
 
 ## Key files
@@ -29,7 +29,8 @@ Public: `/` · `/about` · `/work` · `/work/:slug` · `/blog` · `/blog/:slug` 
 ### SEO
 
 One `seo.service.ts` sets title, description, canonical, Open Graph and JSON-LD per route. Every
-absolute URL derives from a single `APP_URL`, so the production domain is a one-line change.
+absolute URL derives from a single `APP_URL` (production: `https://underwoodstyles.ca`), so
+nothing else hardcodes the host.
 
 ## Patterns to follow
 

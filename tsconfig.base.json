@@ -15,7 +15,7 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@portfolio/domain": ["libs/domain/src/index.ts"]
+      "@wayfinder/domain": ["libs/domain/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

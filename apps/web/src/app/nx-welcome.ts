@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
-  selector: 'gu-nx-welcome',
+  selector: 'wf-nx-welcome',
   imports: [CommonModule],
   template: `
     <!--

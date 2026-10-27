@@ -11,7 +11,7 @@ leftovers.
 
 ## Key files
 
-- [../tsconfig.base.json](../tsconfig.base.json) — the `@portfolio/domain` path alias
+- [../tsconfig.base.json](../tsconfig.base.json) — the `@wayfinder/domain` path alias
 - [../eslint.config.mjs](../eslint.config.mjs) — module boundaries, including the banned imports inside `libs/domain`
 - [../.prettierrc](../.prettierrc) — single quotes, 2-space tabs
 - [../.nvmrc](../.nvmrc) / `engines` in [../package.json](../package.json) — Node 22, kept in step with CI
@@ -35,7 +35,7 @@ green test run and only fails in the webpack/Angular builds.
 - **Explicit return types on every exported function and method**, including `: void` and
   `: Promise<void>`. An inferred return type is where an accidental `any` or a widened union
   enters a contract.
-- Path alias `@portfolio/domain` → `libs/domain/src/index.ts`. Populated `paths`, not project
+- Path alias `@wayfinder/domain` → `libs/domain/src/index.ts`. Populated `paths`, not project
   references.
 - `apps/server` builds with `strictNullChecks` and `noImplicitAny`; the Angular app uses the
   generator's strict template and compiler settings.
@@ -51,10 +51,10 @@ green test run and only fails in the webpack/Angular builds.
 
 ### The shared contract
 
-#### ✅ Anything crossing the HTTP boundary is typed in `@portfolio/domain`
+#### ✅ Anything crossing the HTTP boundary is typed in `@wayfinder/domain`
 
 ```ts
-import { ApiErrorCode, type Post } from '@portfolio/domain';
+import { ApiErrorCode, type Post } from '@wayfinder/domain';
 ```
 
 #### ✅ A NestJS DTO class lives in the server and `implements` the shared interface

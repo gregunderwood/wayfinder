@@ -1,8 +1,8 @@
-# Agent Guidelines for portfolio
+# Agent Guidelines for wayfinder
 
 Quick-reference cheat sheet. For deeper docs, follow the links into `docs/`.
 
-**This site is Greg Underwood's portfolio, and it is also a work sample.** A recruiter or client
+**Wayfinder is Greg Underwood's portfolio site (underwoodstyles.ca), and it is also a work sample.** A recruiter or client
 who views source, runs Lighthouse, or reads the repo is evaluating the author. Sloppy code here
 argues against the person it is meant to hire, so "it renders" is not the bar.
 
@@ -32,7 +32,7 @@ npx prettier --write .                # format
 - **And `npx nx test server --coverage`**, which is where the thresholds are actually checked.
 - Node 22 via nvm (`.nvmrc`). A fresh non-login shell may not have `node` on `PATH`; run
   `. ~/.nvm/nvm.sh && nvm use` first.
-- There is no `serve` on `libs/domain`; it is consumed through the `@portfolio/domain` alias.
+- There is no `serve` on `libs/domain`; it is consumed through the `@wayfinder/domain` alias.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ See [docs/Architecture.md](docs/Architecture.md) for full details.
   `/admin/*` is client-only, `noindex`, and excluded from prerender.
 - **Content is DB-backed** (Postgres via TypeORM) behind a single-user admin; until that lands,
   public content is hardcoded TypeScript so the site can go live without a database.
-- **One API client** in the web app, every method typed from `@portfolio/domain`; HTTP errors are
+- **One API client** in the web app, every method typed from `@wayfinder/domain`; HTTP errors are
   handled in exactly one interceptor.
 
 ## Code Style
@@ -52,7 +52,7 @@ See [docs/Architecture.md](docs/Architecture.md) for full details.
 See [docs/Code Quality.md](docs/Code%20Quality.md) for full details.
 
 - TypeScript strict, **explicit return types on every exported function and method**
-- `@portfolio/domain` for anything crossing the HTTP boundary; interfaces, enums and consts only,
+- `@wayfinder/domain` for anything crossing the HTTP boundary; interfaces, enums and consts only,
   no framework imports (enforced by `@nx/enforce-module-boundaries`)
 - NestJS DTO classes live in the server and `implements` the shared interface, so class-validator
   never reaches the browser bundle

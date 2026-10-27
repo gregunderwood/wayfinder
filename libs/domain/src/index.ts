@@ -1,5 +1,5 @@
 /**
- * @portfolio/domain - the shared contract between the Angular app and the
+ * @wayfinder/domain - the shared contract between the Angular app and the
  * NestJS API.
  *
  * INVARIANT: this library contains interfaces, enums and const objects ONLY.

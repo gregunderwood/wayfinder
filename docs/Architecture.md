@@ -42,7 +42,7 @@ Enforced by `@nx/enforce-module-boundaries` in the root `eslint.config.mjs`:
 ### Why SSR here
 
 A portfolio lives or dies on search and link previews. A client-only Angular app shows crawlers
-and Slack/LinkedIn unfurlers an empty `<gu-root>`. Prerendering also makes the public pages cheap
+and Slack/LinkedIn unfurlers an empty `<wf-root>`. Prerendering also makes the public pages cheap
 to serve and resilient to the API being down.
 
 ### Why TLS is not in Node
