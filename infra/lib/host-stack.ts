@@ -1,6 +1,16 @@
-import { CfnOutput, Stack, StackProps, Tags, Validations } from 'aws-cdk-lib';
+import {
+  CfnOutput,
+  Duration,
+  Stack,
+  StackProps,
+  Tags,
+  Validations,
+} from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import { CONFIG } from './config';
 import { hostUserData } from './host-user-data';
@@ -8,6 +18,7 @@ import { hostUserData } from './host-user-data';
 export interface HostStackProps extends StackProps {
   readonly repository: ecr.IRepository;
   readonly eipAllocationId: string;
+  readonly alerts: sns.ITopic;
 }
 
 /**
@@ -67,6 +78,10 @@ export class HostStack extends Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType(CONFIG.instanceType),
+      // Standard credits: under sustained load the instance slows to its
+      // baseline instead of billing for surplus CPU. A predictable bill
+      // matters more than peak speed for a personal site.
+      creditSpecification: ec2.CpuCredits.STANDARD,
       // Resolved once and cached in cdk.context.json. Left uncached, every
       // deploy after an Amazon Linux release would silently replace the host.
       machineImage: ec2.MachineImage.latestAmazonLinux2023({
@@ -123,6 +138,79 @@ export class HostStack extends Stack {
       instanceId: instance.instanceId,
     });
 
+    this.addAlarms(instance, props.alerts);
+
     new CfnOutput(this, 'InstanceId', { value: instance.instanceId });
+  }
+
+  /**
+   * Status-check alarms that fix the host rather than only reporting it: a
+   * failed system check (AWS hardware or network) recovers the instance onto
+   * new hardware, keeping its ID, IP and disk; a failed instance check (a hung
+   * kernel, exhausted memory) reboots it, and the containers restart with
+   * Docker. Each also emails, as does running low on CPU credits.
+   */
+  private addAlarms(instance: ec2.Instance, alerts: sns.ITopic): void {
+    const notify = new actions.SnsAction(alerts);
+    const metric = (metricName: string, statistic = 'Maximum') =>
+      new cloudwatch.Metric({
+        namespace: 'AWS/EC2',
+        metricName,
+        dimensionsMap: { InstanceId: instance.instanceId },
+        statistic,
+        period: Duration.minutes(1),
+      });
+
+    const failed = {
+      threshold: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.MISSING,
+    };
+
+    const system = new cloudwatch.Alarm(this, 'SystemCheckFailed', {
+      ...failed,
+      alarmName: 'wayfinder-web-system-check',
+      alarmDescription: 'AWS-side failure under the web host; recovering it',
+      metric: metric('StatusCheckFailed_System'),
+    });
+    system.addAlarmAction(
+      new actions.Ec2Action(actions.Ec2InstanceAction.RECOVER),
+      notify,
+    );
+    system.addOkAction(notify);
+
+    const guest = new cloudwatch.Alarm(this, 'InstanceCheckFailed', {
+      ...failed,
+      // Three minutes, so a slow boot after the reboot below does not
+      // trigger another one.
+      evaluationPeriods: 3,
+      alarmName: 'wayfinder-web-instance-check',
+      alarmDescription: 'The web host OS is unresponsive; rebooting it',
+      metric: metric('StatusCheckFailed_Instance'),
+    });
+    guest.addAlarmAction(
+      new actions.Ec2Action(actions.Ec2InstanceAction.REBOOT),
+      notify,
+    );
+    guest.addOkAction(notify);
+
+    // Credits run out only under sustained load, i.e. something unusual:
+    // a traffic spike, a scraper or a runaway process.
+    const credits = new cloudwatch.Alarm(this, 'CpuCreditsLow', {
+      alarmName: 'wayfinder-web-cpu-credits',
+      alarmDescription:
+        'The web host is nearly out of CPU credits and will be throttled',
+      metric: metric('CPUCreditBalance', 'Minimum').with({
+        period: Duration.minutes(5),
+      }),
+      threshold: 20,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 3,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    credits.addAlarmAction(notify);
+    credits.addOkAction(notify);
   }
 }

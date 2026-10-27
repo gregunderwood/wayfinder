@@ -3,10 +3,19 @@
 # No ACME email is set: Let's Encrypt no longer sends expiry notices, and
 # Caddy renews on its own. The API and Postgres join here in Phase 3.
 
+# Docker keeps container logs forever by default; on a 20 GB disk that is an
+# outage on a timer. Cap each service at 3 × 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
 services:
   web:
     image: ${WEB_IMAGE:?set WEB_IMAGE to the image to run}
     restart: unless-stopped
+    logging: *logging
     # Node as PID 1 ignores SIGTERM, so every stop would wait out the 10 s kill
     # timeout. tini forwards the signal and reaps zombies.
     init: true
@@ -36,6 +45,7 @@ services:
   caddy:
     image: caddy:2.11.7-alpine
     restart: unless-stopped
+    logging: *logging
     ports:
       - '80:80'
       - '443:443'

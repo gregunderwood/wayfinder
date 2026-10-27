@@ -11,6 +11,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import { CONFIG } from './config';
 
@@ -24,6 +25,7 @@ import { CONFIG } from './config';
 export class FoundationStack extends Stack {
   readonly repository: ecr.IRepository;
   readonly eipAllocationId: string;
+  readonly alerts: sns.ITopic;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, { ...props, terminationProtection: true });
@@ -140,6 +142,22 @@ export class FoundationStack extends Stack {
       },
     );
 
+    // Every alarm in this region notifies here. It lives with the foundation
+    // so the email subscription survives a host rebuild. Subscriptions are
+    // added from the CLI (see docs/Deployment.md), which keeps the address
+    // out of a public repository.
+    const alerts = new sns.Topic(this, 'Alerts', {
+      topicName: 'wayfinder-alerts',
+      displayName: 'wayfinder alerts',
+      enforceSSL: true,
+    });
+    this.alerts = alerts;
+    Validations.of(alerts).acknowledge({
+      id: 'AwsSolutions::AwsSolutions-SNS2',
+      reason:
+        'Carries alarm state changes only, nothing sensitive; a customer managed KMS key would cost more than the rest of the alerting.',
+    });
+
     new CfnOutput(this, 'NameServers', {
       description: 'Set these as custom DNS nameservers at Namecheap',
       value: Fn.join(', ', zone.hostedZoneNameServers ?? []),
@@ -149,5 +167,6 @@ export class FoundationStack extends Stack {
       value: this.repository.repositoryUri,
     });
     new CfnOutput(this, 'DeployRoleArn', { value: deployRole.roleArn });
+    new CfnOutput(this, 'AlertsTopicArn', { value: alerts.topicArn });
   }
 }

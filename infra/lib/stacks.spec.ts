@@ -3,6 +3,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CONFIG } from './config';
 import { FoundationStack } from './foundation-stack';
 import { HostStack } from './host-stack';
+import { UptimeStack } from './uptime-stack';
 
 function synth() {
   const app = new App();
@@ -12,14 +13,19 @@ function synth() {
     env,
     repository: foundation.repository,
     eipAllocationId: foundation.eipAllocationId,
+    alerts: foundation.alerts,
+  });
+  const uptime = new UptimeStack(app, 'Uptime', {
+    env: { account: CONFIG.account, region: 'us-east-1' },
   });
   return {
     foundation: Template.fromStack(foundation),
     host: Template.fromStack(host),
+    uptime: Template.fromStack(uptime),
   };
 }
 
-const { foundation, host } = synth();
+const { foundation, host, uptime } = synth();
 
 describe('FoundationStack', () => {
   it('lets only the production environment of this repo assume the deploy role', () => {
@@ -105,5 +111,41 @@ describe('HostStack', () => {
     const userData = JSON.stringify(instance.Properties.UserData);
     expect(userData).toContain(`${CONFIG.compose.sha256}  `);
     expect(userData).toContain('sha256sum -c -');
+  });
+
+  it('recovers on a system check failure and reboots on an instance check failure', () => {
+    const actionsFor = (metricName: string) => {
+      const [alarm] = Object.values(
+        host.findResources('AWS::CloudWatch::Alarm', {
+          Properties: { MetricName: metricName },
+        }),
+      );
+      return JSON.stringify(alarm.Properties.AlarmActions);
+    };
+    expect(actionsFor('StatusCheckFailed_System')).toContain(':ec2:recover');
+    expect(actionsFor('StatusCheckFailed_Instance')).toContain(':ec2:reboot');
+  });
+
+  it('uses standard CPU credits so load cannot run up the bill', () => {
+    host.hasResourceProperties('AWS::EC2::Instance', {
+      CreditSpecification: { CPUCredits: 'standard' },
+    });
+  });
+});
+
+describe('UptimeStack', () => {
+  it('checks the public HTTPS site and alarms when it is down', () => {
+    uptime.hasResourceProperties('AWS::Route53::HealthCheck', {
+      HealthCheckConfig: Match.objectLike({
+        Type: 'HTTPS',
+        FullyQualifiedDomainName: CONFIG.domain,
+        EnableSNI: true,
+      }),
+    });
+    uptime.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      Namespace: 'AWS/Route53',
+      MetricName: 'HealthCheckStatus',
+      TreatMissingData: 'breaching',
+    });
   });
 });

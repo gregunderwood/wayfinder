@@ -29,6 +29,9 @@ jobs:
       - run: npx nx format:check
       - run: npx nx affected -t lint test build
       - run: npx nx test server --coverage
+      # Synthesizes every stack and runs the cdk-nag AWS Solutions checks.
+      # Lookups are cached in cdk.context.json, so no AWS access is needed.
+      - run: npx nx run infra:synth
 
   # Builds the production image and runs it behind Caddy exactly as the host
   # will, so a broken Dockerfile, compose file or Caddyfile fails here rather

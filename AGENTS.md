@@ -12,6 +12,7 @@ argues against the person it is meant to hire, so "it renders" is not the bar.
 - Where a thing belongs, the three projects, SSR, the API seam → Read [./docs/Architecture.md](./docs/Architecture.md)
 - The Angular app, routes, SEO, the admin area → Read [./docs/Web App.md](./docs/Web%20App.md)
 - Tests (`*.spec.ts`), coverage, Cypress → Read [./docs/Testing.md](./docs/Testing.md)
+- AWS, `infra/`, deploys, rollback, alerts, the host → Read [./docs/Deployment.md](./docs/Deployment.md)
 - "What's next" / "where were we" → Read [./docs/Roadmap.md](./docs/Roadmap.md)
 - First time in the repo, or nothing runs → Read [./docs/Getting Started/Development setup.md](./docs/Getting%20Started/Development%20setup.md)
 
@@ -24,6 +25,7 @@ npx nx run-many -t lint,test,build    # the gate
 npx nx test server --coverage         # also the gate: thresholds are checked ONLY here
 npx nx e2e web-e2e                    # Cypress
 npx prettier --write .                # format
+npx nx run infra:synth                # synthesize the AWS stacks + cdk-nag checks
 ```
 
 - **`npx nx run-many -t lint,test,build` is the final step before declaring work done.** Not

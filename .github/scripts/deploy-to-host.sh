@@ -21,21 +21,30 @@ compose_b64=$(base64 -w0 docker-compose.yml)
 caddyfile_b64=$(base64 -w0 Caddyfile)
 
 # Runs on the host as root. `up --wait` blocks until every container passes
-# its healthcheck, so an image that cannot serve fails the deploy loudly. On
-# one host there is a brief gap while the web container is swapped; rollback
-# is redeploying the previous SHA.
+# its healthcheck. If the new image never gets healthy, the host goes back to
+# the image it was running, so a bad build costs a failed pipeline rather
+# than the site; the previous image is still local because pruning only runs
+# after a successful rollout.
 remote=$(cat <<SCRIPT
 set -euo pipefail
 cd $app_dir
+previous=\$(sed -n 's/^WEB_IMAGE=//p' .env 2>/dev/null || true)
+write_env() { printf 'WEB_IMAGE=%s\nSITE_DOMAIN=%s\n' "\$1" '$SITE_DOMAIN' > .env; }
 echo '$compose_b64' | base64 -d > docker-compose.yml
 echo '$caddyfile_b64' | base64 -d > Caddyfile
-printf 'WEB_IMAGE=%s\nSITE_DOMAIN=%s\n' '$IMAGE' '$SITE_DOMAIN' > .env
+write_env '$IMAGE'
 docker compose pull --quiet
-docker compose up -d --wait --wait-timeout 120 --remove-orphans
+if ! docker compose up -d --wait --wait-timeout 120 --remove-orphans; then
+  docker compose logs --tail 50 web || true
+  if [ -n "\$previous" ] && [ "\$previous" != '$IMAGE' ]; then
+    echo "New image never became healthy; rolling back to \$previous"
+    write_env "\$previous"
+    docker compose up -d --wait --wait-timeout 120 --remove-orphans
+  fi
+  exit 1
+fi
 docker image prune -af >/dev/null
 docker compose ps --format '{{.Service}}: {{.Status}}'
-code=\$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: $SITE_DOMAIN' http://localhost/)
-[ "\$code" = 308 ] || { echo "Caddy returned \$code on :80, expected a 308 to HTTPS"; exit 1; }
 SCRIPT
 )
 
@@ -62,7 +71,16 @@ aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instan
 echo "SSM status: $status"
 [ "$status" = Success ] || exit 1
 
-# The same check from outside, through the security group and Elastic IP.
-code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $SITE_DOMAIN" "http://$public_ip/")
-echo "Public :80 returned $code"
-[ "$code" = 308 ]
+# The same checks a visitor would make, from outside, over the real
+# certificate. --resolve pins the domain to this host's IP so the result
+# does not depend on DNS caches.
+check() {
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+    --resolve "$SITE_DOMAIN:80:$public_ip" --resolve "$SITE_DOMAIN:443:$public_ip" "$2")
+  echo "$code $2"
+  [ "$code" = "$1" ]
+}
+check 200 "https://$SITE_DOMAIN/"
+check 200 "https://$SITE_DOMAIN/sitemap.xml"
+check 404 "https://$SITE_DOMAIN/no-such-page"
+check 308 "http://$SITE_DOMAIN/"
