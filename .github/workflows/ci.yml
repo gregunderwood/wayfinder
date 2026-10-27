@@ -12,19 +12,19 @@ jobs:
   main:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # nx affected needs history back to the merge base.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Read from .nvmrc so CI can never drift from the engines pin.
           node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
-      - uses: nrwl/nx-set-shas@v4
+      - uses: nrwl/nx-set-shas@v5
 
       - run: npx nx format:check
       - run: npx nx affected -t lint test build
