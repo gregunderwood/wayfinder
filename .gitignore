@@ -50,3 +50,6 @@ vitest.config.*.timestamp*
 # wayfinder
 apps/server/.env
 uploads/
+
+# CDK synth output
+infra/cdk.out/

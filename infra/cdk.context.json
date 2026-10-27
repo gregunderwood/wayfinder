@@ -1,0 +1,8 @@
+{
+  "availability-zones:account=742188596859:region=ca-central-1": [
+    "ca-central-1a",
+    "ca-central-1b",
+    "ca-central-1d"
+  ],
+  "ssm:account=742188596859:parameterName=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64:region=ca-central-1": "ami-03ab98d4df659a7bd"
+}

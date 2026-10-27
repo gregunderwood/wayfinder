@@ -1,0 +1,27 @@
+{
+  "name": "infra",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "infra/lib",
+  "tags": ["type:infra"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default"],
+      "options": { "command": "tsc --noEmit -p tsconfig.json", "cwd": "infra" }
+    },
+    "synth": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cdk synth --strict --quiet", "cwd": "infra" }
+    },
+    "diff": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cdk diff", "cwd": "infra" }
+    },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "options": { "command": "cdk deploy", "cwd": "infra" }
+    }
+  }
+}
