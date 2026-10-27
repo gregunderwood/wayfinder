@@ -88,7 +88,7 @@ export class FoundationStack extends Stack {
       assumedBy: new iam.WebIdentityPrincipal(github.oidcProviderArn, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-          'token.actions.githubusercontent.com:sub': `repo:${CONFIG.github.repo}:environment:${CONFIG.github.environment}`,
+          'token.actions.githubusercontent.com:sub': `${CONFIG.github.subject}:environment:${CONFIG.github.environment}`,
         },
       }),
     });

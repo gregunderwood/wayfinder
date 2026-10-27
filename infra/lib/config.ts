@@ -7,8 +7,16 @@ export const CONFIG = {
   account: '742188596859',
   region: 'ca-central-1',
   domain: 'underwoodstyles.ca',
-  /** The only repository, and GitHub environment, allowed to deploy. */
-  github: { repo: 'gregunderwood/wayfinder', environment: 'production' },
+  /**
+   * The only repository, and GitHub environment, allowed to deploy. GitHub
+   * issues this repo's OIDC tokens with immutable subjects, which carry the
+   * numeric owner and repo IDs: a repo deleted and recreated under the same
+   * name gets a new ID and cannot assume the deploy role.
+   */
+  github: {
+    subject: 'repo:gregunderwood@313113/wayfinder@1435180502',
+    environment: 'production',
+  },
   instanceType: 't4g.small',
   /**
    * Deploys find the host by this tag, and the deploy role may only run

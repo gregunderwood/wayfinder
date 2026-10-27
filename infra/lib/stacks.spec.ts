@@ -33,7 +33,7 @@ describe('FoundationStack', () => {
               StringEquals: {
                 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
                 'token.actions.githubusercontent.com:sub':
-                  'repo:gregunderwood/wayfinder:environment:production',
+                  'repo:gregunderwood@313113/wayfinder@1435180502:environment:production',
               },
             },
           }),
