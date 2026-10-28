@@ -9,8 +9,22 @@ import {
 import { type ApiError, ApiErrorCode } from '@wayfinder/domain';
 import type { Response } from 'express';
 
-/** Used when a thrown HttpException did not name its own code. */
-const CODE_BY_STATUS: Partial<Record<number, ApiErrorCode>> = {
+type ErrorResponse = [status: number, body: ApiError];
+
+interface ThrownResponse {
+  code?: ApiErrorCode;
+  message?: string | string[];
+  details?: Record<string, unknown>;
+}
+
+interface NormalisedResponse {
+  code?: ApiErrorCode;
+  message?: string;
+  details?: Record<string, unknown>;
+  validationErrors?: string[];
+}
+
+const CODE_FOR_STATUS: Partial<Record<number, ApiErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: ApiErrorCode.ValidationFailed,
   [HttpStatus.UNAUTHORIZED]: ApiErrorCode.Unauthorized,
   [HttpStatus.FORBIDDEN]: ApiErrorCode.Forbidden,
@@ -19,53 +33,39 @@ const CODE_BY_STATUS: Partial<Record<number, ApiErrorCode>> = {
   [HttpStatus.TOO_MANY_REQUESTS]: ApiErrorCode.RateLimited,
 };
 
-/**
- * Every error response is an `ApiError`, so the web app's one interceptor
- * branches on `code` instead of on whichever shape Nest, the ValidationPipe or
- * a hand-thrown exception happened to produce.
- */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const response = host.switchToHttp().getResponse<Response>();
-    const [status, body] = this.toApiError(exception);
-    response.status(status).json(body);
+    const [status, body] = this.toErrorResponse(exception);
+    host.switchToHttp().getResponse<Response>().status(status).json(body);
   }
 
-  toApiError(exception: unknown): [number, ApiError] {
-    if (!(exception instanceof HttpException)) {
-      // The detail goes to the log, never the client: a stack trace or a SQL
-      // message tells an attacker more than it tells a visitor.
-      this.logger.error(
-        exception instanceof Error
-          ? (exception.stack ?? exception.message)
-          : String(exception),
-      );
-      return [
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        { code: ApiErrorCode.Internal, message: 'Internal server error' },
-      ];
+  toErrorResponse(exception: unknown): ErrorResponse {
+    const errorResponse =
+      exception instanceof HttpException
+        ? this.fromHttpException(exception)
+        : this.fromUnexpectedError();
+    const [status] = errorResponse;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(describeForLog(exception));
     }
+    return errorResponse;
+  }
 
+  private fromHttpException(exception: HttpException): ErrorResponse {
     const status = exception.getStatus();
-    const raw = exception.getResponse();
-    const fields: Partial<ApiError> & { message?: string | string[] } =
-      typeof raw === 'string' ? { message: raw } : (raw as Partial<ApiError>);
-    const code =
-      fields.code ??
-      CODE_BY_STATUS[status] ??
-      (status >= 500 ? ApiErrorCode.Internal : ApiErrorCode.BadRequest);
+    const exceptionResponse = readExceptionResponse(exception);
+    const code = exceptionResponse.code ?? defaultCodeForStatus(status);
 
-    // The ValidationPipe reports one message per failed constraint.
-    if (Array.isArray(fields.message)) {
+    if (exceptionResponse.validationErrors) {
       return [
         status,
         {
           code,
           message: 'Validation failed',
-          details: { errors: fields.message },
+          details: { errors: exceptionResponse.validationErrors },
         },
       ];
     }
@@ -73,9 +73,44 @@ export class ApiExceptionFilter implements ExceptionFilter {
       status,
       {
         code,
-        message: fields.message ?? exception.message,
-        ...(fields.details && { details: fields.details }),
+        message: exceptionResponse.message ?? exception.message,
+        ...(exceptionResponse.details && {
+          details: exceptionResponse.details,
+        }),
       },
     ];
   }
+
+  private fromUnexpectedError(): ErrorResponse {
+    return [
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      { code: ApiErrorCode.Internal, message: 'Internal server error' },
+    ];
+  }
+}
+
+function readExceptionResponse(exception: HttpException): NormalisedResponse {
+  const thrown = exception.getResponse();
+  if (typeof thrown === 'string') {
+    return { message: thrown };
+  }
+  const { code, message, details } = thrown as ThrownResponse;
+  return Array.isArray(message)
+    ? { code, details, validationErrors: message }
+    : { code, details, message };
+}
+
+function defaultCodeForStatus(status: number): ApiErrorCode {
+  return (
+    CODE_FOR_STATUS[status] ??
+    (status >= HttpStatus.INTERNAL_SERVER_ERROR
+      ? ApiErrorCode.Internal
+      : ApiErrorCode.BadRequest)
+  );
+}
+
+function describeForLog(exception: unknown): string {
+  return exception instanceof Error
+    ? (exception.stack ?? exception.message)
+    : String(exception);
 }

@@ -12,6 +12,7 @@ Cypress covers route visibility end to end.
 - [../vitest.workspace.ts](../vitest.workspace.ts) — discovers each project's own vitest config
 - [../apps/server/vitest.config.ts](../apps/server/vitest.config.ts) — the coverage `include` list and thresholds
 - [../apps/web/vite.config.mts](../apps/web/vite.config.mts) — Angular tests via Analog's Vitest plugin
+- [../apps/server/src/testing/](../apps/server/src/testing/) — the test database: global setup and `useTestDatabase()`
 - [../apps/web-e2e/](../apps/web-e2e/) — Cypress
 
 ## How it works
@@ -44,8 +45,8 @@ Angular component tests use `provideZonelessChangeDetection()`.
 `npx nx test server` needs Postgres running (`docker compose up -d --wait postgres`); CI's `main`
 job starts it as a service. A Vitest global setup creates a template database
 (`wayfinder_test_template`), runs every migration into it from the same `migrations/index.ts`
-list the image uses, and gives each test worker its own copy (`CREATE DATABASE … TEMPLATE`), so
-files run in parallel without sharing rows. Tables are truncated between tests. Test databases
+list the image uses. Each spec file that calls `useTestDatabase()` gets its own copy
+(`CREATE DATABASE … TEMPLATE`), so files run in parallel without sharing rows. Tables are truncated between tests. Test databases
 are dropped at the end, and the development database is never touched.
 
 A case that needs the database _unreachable_ points a real connection at a port with nothing
@@ -72,6 +73,8 @@ replaced by a small hand-written class, never a deep `vi.fn()` chain.
 
 - **`connect ECONNREFUSED 127.0.0.1:5432` in the server tests.** Postgres is not running; start
   it with `docker compose up -d --wait postgres`.
+- **Two server test runs at once break each other.** Each run's setup and teardown drop every
+  `wayfinder_test_*` database, including the other run's.
 - **A migration missing from `migrations/index.ts` fails the tests,** because the test database
   is built from that list. That is deliberate: the image uses the same list.
 - **Coverage thresholds only run under `--coverage`.** That is why it is part of the gate.

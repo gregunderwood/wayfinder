@@ -25,10 +25,21 @@ jobs:
 
       - run: npm ci
       - uses: nrwl/nx-set-shas@v5
+      - run: docker compose up -d --wait postgres
+        env:
+          WEB_IMAGE: unused
+          API_IMAGE: unused
+          SITE_DOMAIN: unused
+          DATABASE_PASSWORD: ci-only
+          COMPOSE_FILE: docker-compose.yml:docker-compose.local.yml
 
       - run: npx nx format:check
       - run: npx nx affected -t lint test build
+        env:
+          DATABASE_PASSWORD: ci-only
       - run: npx nx test server --coverage
+        env:
+          DATABASE_PASSWORD: ci-only
       # Synthesizes every stack and runs the cdk-nag AWS Solutions checks.
       # Lookups are cached in cdk.context.json, so no AWS access is needed.
       - run: npx nx run infra:synth
@@ -70,9 +81,7 @@ jobs:
           expect 308 http://localhost/
           expect 200 https://localhost/api/health
           expect 404 https://localhost/api/no-such-route
-          health=$(curl -sk https://localhost/api/health)
-          echo "$health"
-          [ "$health" = '{"status":"ok","db":true}' ] || { echo 'API cannot reach Postgres'; exit 1; }
+          curl -sk https://localhost/api/health | tee /dev/stderr | jq -e '.databaseReachable' >/dev/null || { echo 'API cannot reach Postgres'; exit 1; }
           curl -sk https://localhost/api/no-such-route | grep -q '"code":"NOT_FOUND"' || { echo 'API error has no code'; exit 1; }
           for url in https://localhost/ https://localhost/api/health; do
             headers=$(curl -skI "$url")

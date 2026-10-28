@@ -26,13 +26,16 @@ describe('readDatabaseConfig', () => {
     );
   });
 
-  it('rejects a port that is not a number', () => {
-    expect(() =>
-      readDatabaseConfig(
-        env({ DATABASE_PASSWORD: 'x', DATABASE_PORT: 'five' }),
-      ),
-    ).toThrow(/DATABASE_PORT/);
-  });
+  it.each(['five', '0', '65536', '54.32'])(
+    'rejects "%s" as a port',
+    (configuredPort) => {
+      expect(() =>
+        readDatabaseConfig(
+          env({ DATABASE_PASSWORD: 'x', DATABASE_PORT: configuredPort }),
+        ),
+      ).toThrow(/DATABASE_PORT/);
+    },
+  );
 
   it('reads every setting from the environment', () => {
     expect(
@@ -62,5 +65,13 @@ describe('databaseOptions', () => {
     );
     expect(options.synchronize).toBe(false);
     expect(options.migrationsRun).toBe(false);
+  });
+
+  it('limits query time for the API but not for migrations', () => {
+    const config = readDatabaseConfig(env({ DATABASE_PASSWORD: 'x' }));
+    expect(databaseOptions(config).extra.query_timeout).toBeGreaterThan(0);
+    expect(
+      databaseOptions(config, { allowLongQueries: true }).extra.query_timeout,
+    ).toBeUndefined();
   });
 });

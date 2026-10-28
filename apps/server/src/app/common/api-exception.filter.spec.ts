@@ -13,9 +13,12 @@ describe('ApiExceptionFilter', () => {
   const filter = new ApiExceptionFilter();
 
   it('gives a bare Nest exception the code for its status', () => {
-    expect(filter.toApiError(new NotFoundException('No such project'))).toEqual(
-      [404, { code: ApiErrorCode.NotFound, message: 'No such project' }],
-    );
+    expect(
+      filter.toErrorResponse(new NotFoundException('No such project')),
+    ).toEqual([
+      404,
+      { code: ApiErrorCode.NotFound, message: 'No such project' },
+    ]);
   });
 
   it('keeps a code the thrower chose, with its details', () => {
@@ -24,7 +27,7 @@ describe('ApiExceptionFilter', () => {
       message: 'Slug "x" is taken',
       details: { slug: 'x' },
     });
-    expect(filter.toApiError(thrown)).toEqual([
+    expect(filter.toErrorResponse(thrown)).toEqual([
       409,
       {
         code: ApiErrorCode.SlugTaken,
@@ -39,7 +42,7 @@ describe('ApiExceptionFilter', () => {
       'title must be a string',
       'slug should not be empty',
     ]);
-    expect(filter.toApiError(thrown)).toEqual([
+    expect(filter.toErrorResponse(thrown)).toEqual([
       400,
       {
         code: ApiErrorCode.ValidationFailed,
@@ -51,22 +54,37 @@ describe('ApiExceptionFilter', () => {
     ]);
   });
 
+  it('logs a 5xx the code threw on purpose', () => {
+    const logged = silenceErrorLog();
+    filter.toErrorResponse(
+      new HttpException('Upstream down', HttpStatus.BAD_GATEWAY),
+    );
+    expect(logged).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not log a client error', () => {
+    const logged = silenceErrorLog();
+    filter.toErrorResponse(new NotFoundException());
+    expect(logged).not.toHaveBeenCalled();
+  });
+
   it('falls back by status class when nothing more specific applies', () => {
+    silenceErrorLog();
     expect(
-      filter.toApiError(new HttpException('Gone', HttpStatus.GONE))[1].code,
+      filter.toErrorResponse(new HttpException('Gone', HttpStatus.GONE))[1]
+        .code,
     ).toBe(ApiErrorCode.BadRequest);
     expect(
-      filter.toApiError(new HttpException('Down', HttpStatus.BAD_GATEWAY))[1]
-        .code,
+      filter.toErrorResponse(
+        new HttpException('Down', HttpStatus.BAD_GATEWAY),
+      )[1].code,
     ).toBe(ApiErrorCode.Internal);
   });
 
   it('hides an unexpected error from the client and logs it', () => {
-    const logged = vi
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
+    const logged = silenceErrorLog();
     expect(
-      filter.toApiError(new Error('relation "secrets" does not exist')),
+      filter.toErrorResponse(new Error('relation "secrets" does not exist')),
     ).toEqual([
       500,
       { code: ApiErrorCode.Internal, message: 'Internal server error' },
@@ -76,3 +94,9 @@ describe('ApiExceptionFilter', () => {
     );
   });
 });
+
+function silenceErrorLog(): ReturnType<typeof vi.spyOn> {
+  return vi
+    .spyOn(Logger.prototype, 'error')
+    .mockImplementation(() => undefined);
+}

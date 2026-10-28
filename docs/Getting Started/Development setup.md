@@ -15,7 +15,7 @@ docker compose up -d --wait postgres  # Postgres on 127.0.0.1:5432
 npx nx run-many -t lint,test,build    # confirm a clean tree is green
 npx nx serve web                      # http://localhost:4200
 npx nx serve server                   # API on :3000, proxied from the web dev server under /api
-curl -s localhost:3000/api/health     # {"status":"ok","db":true}
+curl -s localhost:3000/api/health     # {"status":"ok","databaseReachable":true}
 ```
 
 ## The production stack, locally

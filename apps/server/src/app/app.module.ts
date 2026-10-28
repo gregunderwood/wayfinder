@@ -8,8 +8,6 @@ import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
-    // The repo-root .env is the one local file shared with Docker Compose and
-    // the TypeORM CLI. In a container there is none and the environment wins.
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],

@@ -53,6 +53,8 @@ services:
       - '3000'
     environment:
       DATABASE_HOST: postgres
+      DATABASE_USER: wayfinder
+      DATABASE_NAME: wayfinder
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
     read_only: true
     tmpfs:

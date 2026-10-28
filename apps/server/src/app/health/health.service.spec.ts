@@ -1,48 +1,46 @@
 import { Logger } from '@nestjs/common';
-import type { DataSource } from 'typeorm';
+import { useTestDatabase } from '../../testing/test-database';
 import { HealthService } from './health.service';
 
-function fakeDataSource(reachable: () => boolean): DataSource {
-  return {
-    query: async (): Promise<unknown[]> => {
-      if (!reachable()) {
-        throw new Error('connect ECONNREFUSED 127.0.0.1:5432');
-      }
-      return [{ '?column?': 1 }];
-    },
-  } as unknown as DataSource;
-}
-
 describe('HealthService', () => {
+  const database = useTestDatabase();
+
+  beforeEach(() => {
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
   it('reports ok when the database answers', async () => {
-    const health = new HealthService(fakeDataSource(() => true));
-    expect(await health.check()).toEqual({ status: 'ok', db: true });
+    const health = new HealthService(database.dataSource);
+
+    expect(await health.check()).toEqual({
+      status: 'ok',
+      databaseReachable: true,
+    });
   });
 
-  it('reports degraded instead of throwing when the database is down', async () => {
-    const health = new HealthService(fakeDataSource(() => false));
-    expect(await health.check()).toEqual({ status: 'degraded', db: false });
+  it('reports degraded instead of failing when the database is gone', async () => {
+    const health = new HealthService(database.dataSource);
+    await database.takeOffline();
+
+    expect(await health.check()).toEqual({
+      status: 'degraded',
+      databaseReachable: false,
+    });
   });
 
-  it('logs when the database state changes, not on every check', async () => {
-    let up = true;
-    const health = new HealthService(fakeDataSource(() => up));
-    const log = vi
-      .spyOn(Logger.prototype, 'log')
-      .mockImplementation(() => undefined);
-    const error = vi
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
+  it('logs when reachability changes, not on every check', async () => {
+    const health = new HealthService(database.dataSource);
 
     await health.check();
     await health.check();
-    up = false;
+    await database.takeOffline();
     await health.check();
     await health.check();
-    up = true;
+    await database.bringBackOnline();
     await health.check();
 
-    expect(log).toHaveBeenCalledTimes(2);
-    expect(error).toHaveBeenCalledTimes(1);
+    expect(Logger.prototype.log).toHaveBeenCalledTimes(2);
+    expect(Logger.prototype.error).toHaveBeenCalledTimes(1);
   });
 });

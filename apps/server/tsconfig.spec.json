@@ -12,6 +12,7 @@
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
     "src/**/*.d.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "src/testing/**/*.ts"
   ]
 }

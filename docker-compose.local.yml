@@ -1,6 +1,3 @@
-# Local overrides for the production compose file: build the images from this
-# checkout and publish Postgres on loopback for `nx serve server` and the
-# TypeORM CLI. Selected by COMPOSE_FILE in .env (see .env.example).
 services:
   web:
     build:

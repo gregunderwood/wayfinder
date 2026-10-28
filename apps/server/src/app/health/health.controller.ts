@@ -6,11 +6,8 @@ import { HealthService } from './health.service';
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 
-  /**
-   * 200 even when degraded. The container healthcheck reads this, and
-   * restarting the API cannot fix a database that is down; it would only take
-   * away the endpoint that says so.
-   */
+  // 200 even when degraded: the container healthcheck reads this, and
+  // restarting the API cannot bring the database back.
   @Get()
   check(): Promise<HealthStatus> {
     return this.health.check();

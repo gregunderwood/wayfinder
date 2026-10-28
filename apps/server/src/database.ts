@@ -2,7 +2,6 @@ import * as pg from 'pg';
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import * as migrations from './migrations';
 
-/** Reads one variable by name: `process.env`, a `ConfigService`, or a test map. */
 export type EnvLookup = (name: string) => string | undefined;
 
 export interface DatabaseConfig {
@@ -13,60 +12,64 @@ export interface DatabaseConfig {
   database: string;
 }
 
-/**
- * The connection settings, read the same way by the running API, the migration
- * runner bundled into it, and the TypeORM CLI, so the three cannot drift.
- *
- * The password has no default. A fallback would let a production container
- * that lost its secret start against a database with a guessable password
- * instead of refusing to boot.
- */
+export interface DatabaseOptionsOverrides {
+  allowLongQueries?: boolean;
+}
+
+const DEFAULT_PORT = 5432;
+const HIGHEST_PORT = 65535;
+const CONNECTION_TIMEOUT_MS = 5_000;
+const QUERY_TIMEOUT_MS = 5_000;
+
+// Listed by hand: the API is a webpack bundle with no directory to glob.
+export const ENTITIES: NonNullable<PostgresConnectionOptions['entities']> = [];
+
 export function readDatabaseConfig(env: EnvLookup): DatabaseConfig {
-  const password = env('DATABASE_PASSWORD');
-  if (!password) {
-    throw new Error('DATABASE_PASSWORD is not set; see .env.example');
-  }
-  const port = Number(env('DATABASE_PORT') ?? 5432);
-  if (!Number.isInteger(port) || port <= 0) {
-    throw new Error(
-      `DATABASE_PORT must be a port number, got "${env('DATABASE_PORT')}"`,
-    );
-  }
   return {
     host: env('DATABASE_HOST') ?? '127.0.0.1',
-    port,
+    port: readPort(env('DATABASE_PORT')),
     username: env('DATABASE_USER') ?? 'wayfinder',
-    password,
+    password: readRequiredPassword(env('DATABASE_PASSWORD')),
     database: env('DATABASE_NAME') ?? 'wayfinder',
   };
 }
 
-/**
- * Every entity, listed rather than globbed: a webpack bundle has no directory
- * to scan, so a glob finds entities in development and none in the image.
- */
-export const ENTITIES: NonNullable<PostgresConnectionOptions['entities']> = [];
-
 export function databaseOptions(
   config: DatabaseConfig,
+  { allowLongQueries = false }: DatabaseOptionsOverrides = {},
 ): PostgresConnectionOptions {
   return {
     type: 'postgres',
-    // TypeORM otherwise loads the driver with a runtime require() by name,
-    // which the generated package.json cannot see; the image then ships
-    // without pg and the API dies on its first connection.
+    // TypeORM's own require('pg') by name is invisible to the bundler, so the
+    // image would ship without the driver.
     driver: pg,
     ...config,
-    // gen_random_uuid() is built into Postgres 13+; the default,
-    // uuid_generate_v4(), needs the uuid-ossp extension installed first.
+    // gen_random_uuid() is built in; the default needs the uuid-ossp extension.
     uuidExtension: 'pgcrypto',
-    // Never true. Schema changes go through reviewed migrations only.
     synchronize: false,
     migrationsRun: false,
     entities: ENTITIES,
     migrations: Object.values(migrations),
-    // pg waits forever for a connection by default, so an unreachable
-    // database would hang /api/health instead of reporting it.
-    extra: { connectionTimeoutMillis: 5_000 },
+    extra: {
+      connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
+      query_timeout: allowLongQueries ? undefined : QUERY_TIMEOUT_MS,
+    },
   };
+}
+
+function readPort(configuredPort: string | undefined): number {
+  const port = Number(configuredPort ?? DEFAULT_PORT);
+  if (!Number.isInteger(port) || port < 1 || port > HIGHEST_PORT) {
+    throw new Error(
+      `DATABASE_PORT must be a port number, got "${configuredPort}"`,
+    );
+  }
+  return port;
+}
+
+function readRequiredPassword(password: string | undefined): string {
+  if (!password) {
+    throw new Error('DATABASE_PASSWORD is not set; see .env.example');
+  }
+  return password;
 }
