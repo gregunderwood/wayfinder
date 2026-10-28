@@ -109,7 +109,48 @@ It becomes a 500 with no `code`, and the web interceptor has nothing to branch o
 Publishing, scheduling, token expiry and rate limits all depend on "now". Services take an
 injected `Clock`; pure functions take `now: Date`. No `new Date()` inside a decision.
 
+### Code reads like a story
+
+A reader should be able to follow a file top to bottom the way they would read prose: the names
+say what is happening, the order says why, and nothing needs a comment to be understood.
+
+- **The entry point reads as a summary.** A public method or a `main` is a short sequence of
+  well-named calls; the detail lives in the functions it calls, below it.
+- **One level of detail per function.** Don't mix "decide what to do" with "format the log line"
+  in the same body; extract the second.
+- **Extract a condition into a name** when it isn't obvious: `if (isValidationFailure(response))`,
+  not `if (Array.isArray(response.message))` with a comment above it.
+- **Name a magic value** as a constant: `MIGRATION_USAGE_ERROR_EXIT_CODE`, not `return 2`.
+- **Early returns over nesting.** Handle the unusual case first and get out.
+
 ### Naming
+
+Names are the main documentation, so they are descriptive even when that makes them long.
+
+#### ✅ Say what the thing is or does, in the reader's words
+
+```ts
+const wasDatabaseReachable: boolean | null = null;
+function readDatabaseConfig(env: EnvLookup): DatabaseConfig;
+const exceptionResponse = exception.getResponse();
+```
+
+#### ❌ Don't abbreviate, and don't use placeholder names
+
+`db`, `cfg`, `res`, `err`, `m`, `raw`, `data`, `info`, `tmp`, `fields`. A one-letter name is
+acceptable only as a loop index or in a one-line arrow whose meaning is obvious from the
+collection: `projects.map((project) => project.slug)`, not `projects.map((p) => p.slug)`.
+
+#### ✅ Booleans read as a question
+
+`isPublished`, `hasPendingMigrations`, `wasDatabaseReachable`, `shouldRetry`.
+
+#### ✅ Functions start with a verb
+
+`readDatabaseConfig`, `toApiError`, `buildSitemap`. A function returning a boolean starts with
+`is`, `has` or `can`.
+
+#### Casing and files
 
 - `camelCase` variables and functions, `PascalCase` types/classes/enums, `SCREAMING_SNAKE_CASE`
   for module constants.
@@ -124,15 +165,38 @@ Use `new Logger(Class.name)`, never `console.log`. Log on change, not per reques
 
 ### Comments
 
-#### ✅ Comment the invariant and what breaks without it
+**Keep comments to an absolute minimum.** First try to make the code explain itself: a better
+name, an extracted function, a named constant. A comment is left only when that is not possible,
+which is almost always one of these:
 
-#### ❌ Don't restate the code
+- **A constraint from outside the code**, such as a library quirk, a protocol rule or a platform
+  limit, where the obvious change would break something and nothing in the code shows it:
+  `driver: pg, // TypeORM's require('pg') by name is invisible to the bundler`.
+- **A deliberate choice that looks like a mistake**, such as returning 200 from a degraded health
+  check.
 
-#### ❌ Don't reference tickets, phases-in-flight, or "as discussed"
+A comment is one line where possible, and it says _why_, never _what_. The same rule applies to
+YAML, Dockerfiles, the Caddyfile and shell scripts.
+
+#### ✅ Doc comments on the shared contract state rules the type can't express
+
+```ts
+/** Doubles as the meta description; keep it under 160 characters. */
+tagline: string;
+```
+
+A length limit, a stability promise or a unit stays. A doc comment that restates the property
+name goes.
+
+#### ❌ Don't restate the code, or describe what a well-named function does
+
+#### ❌ Don't write a paragraph; if it takes one, simplify the code
+
+#### ❌ Don't reference tickets, phases, PRs, or "as discussed"
+
+The docs and the commit history are the time capsule.
 
 #### ❌ Don't speculate about future problems
-
-#### ❌ Don't let a comment explain a block that should be simplified
 
 ## Pitfalls
 
