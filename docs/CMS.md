@@ -48,6 +48,37 @@ added to `ENTITIES` and each migration to `migrations/index.ts` by hand.
 Commands run in the image as `node main.js <command>`: `migrate:show|run|revert` (built) and
 `create-admin` (3.2). None runs on deploy by itself.
 
+### Sensitive data
+
+Anything sensitive in the database is protected so that a copy of the database, or of a backup, is
+not enough to read it or to sign in. There are three layers, and every new column is put in one:
+
+1. **Every disk and backup is encrypted at rest.** The host's root volume already is; the Postgres
+   data volume (3.6) is too, and the S3 backups use server-side encryption. This covers
+   everything, but only against someone holding the raw disk.
+2. **What only needs verifying is hashed, not encrypted:** passwords (argon2id) and refresh tokens
+   (SHA-256). Anything that can be decrypted can leak; a hash cannot be turned back.
+3. **What must be read back is encrypted by the API before it is stored:** AES-256-GCM through a
+   TypeORM column transformer in `common/encrypted-column.ts`. The key, `DATA_ENCRYPTION_KEY`, is
+   an SSM SecureString, so it is never in the database or its backups. Each value is stored with
+   the id of the key that encrypted it, so the key can be rotated.
+
+| Data                                                       | Layer | Lands         |
+| ---------------------------------------------------------- | ----- | ------------- |
+| Admin password, refresh tokens                             | 2     | 3.2           |
+| Admin email                                                | 3     | 3.2           |
+| Two-factor secret                                          | 3     | Later         |
+| Contact messages, and testimonial submitters' emails       | 3     | Phase 5       |
+| Published content (projects, posts, approved testimonials) | 1     | Public anyway |
+
+An encrypted column cannot be searched or indexed, so the design avoids needing to. Login, for
+example, loads the single admin row and compares the email after decrypting it; there is never a
+second admin to look up.
+
+**The key is part of the backup plan.** A restored dump is unreadable without
+`DATA_ENCRYPTION_KEY`, so the restore drill (3.6) proves the key is recoverable as well as the
+data. Losing the key loses every layer-3 value.
+
 ### 3.2 Auth
 
 One admin account, and nothing else: no sign-up, no roles. Every write except the later public
@@ -55,10 +86,10 @@ contact and testimonial forms needs it.
 
 **Tables.**
 
-| Table            | Columns                                                                                                                           |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `admin_users`    | `id`, `email` (unique, stored lowercased), `password_hash`, `totp_secret` (nullable), `last_login_at`, `created_at`, `updated_at` |
-| `refresh_tokens` | `id`, `admin_user_id` (FK, cascade), `family_id`, `token_hash` (unique), `expires_at`, `revoked_at`, `created_at`                 |
+| Table            | Columns                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `admin_users`    | `id`, `email` (encrypted, lowercased first), `password_hash`, `last_login_at`, `created_at`, `updated_at`         |
+| `refresh_tokens` | `id`, `admin_user_id` (FK, cascade), `family_id`, `token_hash` (unique), `expires_at`, `revoked_at`, `created_at` |
 
 **Creating the admin.** `node main.js create-admin --email <address>` reads the password from
 stdin without echo, so it never lands in shell history or `ps`. It refuses if an admin already
@@ -90,12 +121,12 @@ which a cross-site HTML form cannot send without a preflight that will fail.
 
 **Endpoints.**
 
-| Method and path          | Body                         | Success                   | Failure                                                         |
-| ------------------------ | ---------------------------- | ------------------------- | --------------------------------------------------------------- |
-| `POST /api/auth/login`   | `{ email, password, totp? }` | 204, sets both cookies    | 401 `InvalidCredentials`; 401 `TotpRequired`; 429 `RateLimited` |
-| `POST /api/auth/refresh` | none                         | 204, rotates both cookies | 401 `Unauthorized`                                              |
-| `POST /api/auth/logout`  | none                         | 204, clears both cookies  | none                                                            |
-| `GET /api/auth/me`       | none                         | 200 `AdminProfile`        | 401 `Unauthorized`                                              |
+| Method and path          | Body                  | Success                   | Failure                                     |
+| ------------------------ | --------------------- | ------------------------- | ------------------------------------------- |
+| `POST /api/auth/login`   | `{ email, password }` | 204, sets both cookies    | 401 `InvalidCredentials`; 429 `RateLimited` |
+| `POST /api/auth/refresh` | none                  | 204, rotates both cookies | 401 `Unauthorized`                          |
+| `POST /api/auth/logout`  | none                  | 204, clears both cookies  | none                                        |
+| `GET /api/auth/me`       | none                  | 200 `AdminProfile`        | 401 `Unauthorized`                          |
 
 **Guarding.** A Passport JWT strategy reads `wf_access`. `AdminGuard` applies at controller level
 to everything under `/api/admin/*`, and `@CurrentUser()` injects the profile. Public controllers
@@ -105,9 +136,9 @@ never use the guard, and admin controllers never skip it.
 a global ceiling of 300 per minute. Nest must trust exactly one proxy hop (Caddy) to see the real
 IP; see [Pitfalls](#pitfalls).
 
-**TOTP (optional).** When `totp_secret` is set, login without a valid `totp` answers 401
-`TotpRequired` after the password checks out. Enrolment is a CLI command (`totp:enroll`) that
-prints the `otpauth://` URI once.
+**Two-factor sign-in comes after cutover.** It is not in Phase 3. When it lands, the secret is a
+layer-3 encrypted column, and a correct password without a valid code answers 401
+`TotpRequired`.
 
 **Time.** Expiry, rotation and rate windows read an injected `Clock`. Tests use `FixedClock`; no
 decision calls `new Date()`.
@@ -166,13 +197,13 @@ cannot fail a constraint. `src/app/projects/**` joins the coverage `include` lis
 
 **Routes.**
 
-| Path                  | Shows                                   |
-| --------------------- | --------------------------------------- |
-| `/admin/login`        | Email, password, then TOTP if asked for |
-| `/admin`              | Redirects to `/admin/projects`          |
-| `/admin/projects`     | Every project, with status              |
-| `/admin/projects/new` | Editor                                  |
-| `/admin/projects/:id` | Editor                                  |
+| Path                  | Shows                          |
+| --------------------- | ------------------------------ |
+| `/admin/login`        | Email and password             |
+| `/admin`              | Redirects to `/admin/projects` |
+| `/admin/projects`     | Every project, with status     |
+| `/admin/projects/new` | Editor                         |
+| `/admin/projects/:id` | Editor                         |
 
 All are `RenderMode.Client` in `app.routes.server.ts`, listed before the `**` catch-all, never
 prerendered and never in the sitemap. They carry a `noindex` meta tag, Caddy adds
@@ -193,6 +224,9 @@ lazy-loaded, so none of its code reaches a public page's bundle.
 the same `core/markdown.ts` renderer, and its sanitising, as the public page, so the preview cannot
 differ from what is published. A 400's `details.errors` show next to the form; a 409 `SlugTaken`
 shows on the slug field.
+
+**Styling** uses the site's own tokens and shared classes in `styles.scss`, with no component
+library, so there is one styling approach and the admin adds little to the bundle.
 
 Same rules as the rest of the app: standalone, signals, `OnPush`, `inject()`, inline SVG, no
 `ngModel`, no browser globals outside `afterNextRender`.
@@ -280,14 +314,9 @@ A copy of the `refresh_tokens` table, or a backup of it, must not be enough to s
 
 Decided by the owner, then moved into the section above:
 
-1. **TOTP in 3.2, or after cutover?** It is in the roadmap's 3.2. The core login does not depend on
-   it, and it can land last in the step.
-2. **Encrypt `totp_secret` at rest?** It would need another SSM key. Without it, a database copy
-   plus the password is enough to sign in.
-3. **Admin styling:** the public site's hand-written tokens (recommended: one approach, smaller
-   bundle), or Angular Material for its form controls.
-4. **Renaming a published slug:** rejected (this design), or allowed with a stored redirect.
-5. **API integration tests against real Postgres:** inside the CI migration job (this design), or
+1. **Renaming a published slug:** rejected while published (this design), or allowed with the old
+   slug kept as a permanent redirect.
+2. **API integration tests against real Postgres:** inside the CI migration job (this design), or
    a separate `*.int-spec.ts` suite runnable locally.
 
 ## When to update this file

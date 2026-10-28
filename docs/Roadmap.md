@@ -117,7 +117,7 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
 | Step   | What                                                                                                                                                                      |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 3.1 ✅ | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database               |
-| 3.2    | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, optional TOTP, rate-limited login; 90% coverage on auth                            |
+| 3.2    | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth              |
 | 3.3    | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                               |
 | 3.4    | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                                   |
 | 3.5    | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                                 |
@@ -129,6 +129,7 @@ a deploy; and a deleted database can be restored from last night's backup.
 
 ### Deliberately not in Phase 3
 
+- **Two-factor sign-in.** Planned for after cutover; the design is in [CMS.md](CMS.md).
 - **A staging environment.** Today a merge to `main` goes straight to production, guarded by
   CI, container healthchecks and automatic rollback. Later: deploy every merge to a staging
   host first, then promote that same image to production with an explicit approval (a GitHub
