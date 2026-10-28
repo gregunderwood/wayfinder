@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { SeoService } from '../../core/seo.service';
-import { personJsonLd } from '../../core/structured-data';
+import { buildPersonJsonLd } from '../../core/structured-data';
 import { SkillMatrix } from '../../shared/skill-matrix';
 
 @Component({
@@ -93,7 +93,7 @@ export class About {
         'Twenty years of full-stack work, from Palm and BlackBerry to Angular, NestJS and AWS — and how Greg Underwood uses AI coding agents with discipline.',
       path: '/about',
       type: 'profile',
-      jsonLd: personJsonLd(),
+      jsonLd: buildPersonJsonLd(),
     });
   }
 }

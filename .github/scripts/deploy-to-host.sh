@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# Rolls the web host forward to one image over SSM Run Command. The compose
-# file and Caddyfile travel with the command, so the host always runs the
-# configuration from the same commit as the image.
-#
-# Needs: IMAGE (registry/repo:sha), SITE_DOMAIN, AWS credentials for the
-# deploy role. Exits non-zero if the stack does not come up healthy.
+# Needs IMAGE (registry/repo:sha), SITE_DOMAIN and deploy-role credentials.
 set -euo pipefail
 : "${IMAGE:?}" "${SITE_DOMAIN:?}"
 
@@ -20,11 +15,8 @@ echo "Deploying $IMAGE to $instance ($public_ip)"
 compose_b64=$(base64 -w0 docker-compose.yml)
 caddyfile_b64=$(base64 -w0 Caddyfile)
 
-# Runs on the host as root. `up --wait` blocks until every container passes
-# its healthcheck. If the new image never gets healthy, the host goes back to
-# the image it was running, so a bad build costs a failed pipeline rather
-# than the site; the previous image is still local because pruning only runs
-# after a successful rollout.
+# A failed rollout restores the previous image, which is still local because
+# pruning runs only after success.
 remote=$(cat <<SCRIPT
 set -euo pipefail
 cd $app_dir
@@ -55,8 +47,7 @@ command_id=$(aws ssm send-command \
   --parameters "$(jq -n --arg s "$remote" '{commands: [$s], executionTimeout: ["600"]}')" \
   --query Command.CommandId --output text)
 
-# The built-in waiter gives up after 100 seconds; a cold image pull can take
-# longer, so poll for up to ten minutes.
+# The built-in waiter gives up after 100 s; a cold image pull takes longer.
 for _ in $(seq 1 120); do
   status=$(aws ssm get-command-invocation --command-id "$command_id" \
     --instance-id "$instance" --query Status --output text 2>/dev/null || echo Pending)
@@ -71,9 +62,7 @@ aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instan
 echo "SSM status: $status"
 [ "$status" = Success ] || exit 1
 
-# The same checks a visitor would make, from outside, over the real
-# certificate. --resolve pins the domain to this host's IP so the result
-# does not depend on DNS caches.
+# --resolve pins the domain to this host, so DNS caches cannot skew the result.
 check() {
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
     --resolve "$SITE_DOMAIN:80:$public_ip" --resolve "$SITE_DOMAIN:443:$public_ip" "$2")

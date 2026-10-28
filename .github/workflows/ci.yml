@@ -14,12 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # nx affected needs history back to the merge base.
+          # nx affected compares against the merge base.
           fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
-          # Read from .nvmrc so CI can never drift from the engines pin.
           node-version-file: .nvmrc
           cache: npm
 
@@ -40,21 +39,16 @@ jobs:
       - run: npx nx test server --coverage
         env:
           DATABASE_PASSWORD: ci-only
-      # Synthesizes every stack and runs the cdk-nag AWS Solutions checks.
-      # Lookups are cached in cdk.context.json, so no AWS access is needed.
+      # Lookups come from cdk.context.json, so this needs no AWS access.
       - run: npx nx run infra:synth
 
-  # Builds the production images and runs them behind Caddy exactly as the
-  # host will, so a broken Dockerfile, compose file or Caddyfile fails here
-  # rather than on deploy.
   container:
     runs-on: ubuntu-latest
     env:
       WEB_IMAGE: wayfinder-web:ci
       API_IMAGE: wayfinder-api:ci
-      # localhost makes Caddy use its internal CA instead of Let's Encrypt.
+      # localhost: Caddy uses its internal CA, not Let's Encrypt.
       SITE_DOMAIN: localhost
-      # A throwaway database that lives only for this job.
       DATABASE_PASSWORD: ci-only
     steps:
       - uses: actions/checkout@v7

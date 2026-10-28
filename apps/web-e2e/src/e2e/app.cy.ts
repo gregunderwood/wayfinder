@@ -1,6 +1,3 @@
-// Every public route renders its own heading and is reachable from the
-// primary navigation. Admin routes join this suite with the three-case
-// visibility template once authentication exists.
 const PAGES = [
   { path: '/', heading: /full-stack software engineer/i },
   { path: '/work', heading: /things i’ve built/i },

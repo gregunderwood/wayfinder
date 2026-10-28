@@ -1,20 +1,14 @@
-/**
- * Every failure is a real HTTP status carrying one of these codes, so the web
- * app's single error interceptor can branch on a value rather than parse a
- * message. An error inside a 200 body is never acceptable.
- */
 export enum ApiErrorCode {
   ValidationFailed = 'VALIDATION_FAILED',
-  /** A 4xx with no more specific code. */
+  /** Any 4xx without a more specific code. */
   BadRequest = 'BAD_REQUEST',
   NotFound = 'NOT_FOUND',
-  /** No valid session. Distinct from InvalidCredentials, which is a failed sign-in. */
+  /** No valid session; a failed sign-in is InvalidCredentials. */
   Unauthorized = 'UNAUTHORIZED',
   Forbidden = 'FORBIDDEN',
-  /** Anything unexpected. The detail is in the server log, never the response. */
   Internal = 'INTERNAL',
   InvalidCredentials = 'INVALID_CREDENTIALS',
-  /** Password was right; the second factor is still owed. Not a failure to show as one. */
+  /** The password was right; a two-factor code is still owed. */
   TotpRequired = 'TOTP_REQUIRED',
   SlugTaken = 'SLUG_TAKEN',
   RateLimited = 'RATE_LIMITED',

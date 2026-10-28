@@ -10,8 +10,7 @@ export default defineConfig({
     environment: 'node',
     include: ['lib/**/*.spec.ts'],
     reporters: ['default'],
-    // Synthesizing a stack bundles the CDK construct tree; the default 5 s is
-    // tight on a cold run.
+    // Synthesizing the stacks on a cold run can exceed the default 5 s.
     testTimeout: 30_000,
   },
 });

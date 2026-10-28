@@ -1,7 +1,6 @@
 name: Deploy
 
-# Runs after CI passes on main. Run it by hand with a commit SHA to roll back
-# (or forward) to any image that has been built before.
+# Dispatch by hand with a commit SHA to roll back.
 on:
   workflow_run:
     workflows: [CI]
@@ -15,11 +14,8 @@ on:
 
 permissions:
   contents: read
-  # Lets the job request a GitHub OIDC token to exchange for AWS credentials;
-  # no AWS keys are stored in the repository.
   id-token: write
 
-# One deploy at a time, and never cancel one mid-rollout.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -29,15 +25,13 @@ env:
   REPOSITORY: wayfinder/web
   SITE_DOMAIN: underwoodstyles.ca
 
-# Every action below is pinned to a commit SHA, not a tag: this job holds AWS
-# credentials, and a tag can be moved to point at different code. Dependabot
-# proposes updates.
+# Actions are pinned by SHA: this job holds AWS credentials, and tags can move.
 jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    # The host is Graviton, so the image is built natively on arm64.
+    # The host is Graviton (arm64).
     runs-on: ubuntu-24.04-arm
-    # The AWS deploy role trusts only jobs in this environment.
+    # The AWS deploy role trusts only this environment.
     environment:
       name: production
       url: https://underwoodstyles.ca
@@ -59,10 +53,8 @@ jobs:
         run: |
           sha=$(git rev-parse HEAD)
           echo "ref=${{ steps.ecr.outputs.registry }}/$REPOSITORY:$sha" >> "$GITHUB_OUTPUT"
-          # Tags are immutable, so a SHA that was already built (a rollback or
-          # a re-run) is deployed as-is rather than rebuilt. Only "not found"
-          # means build; any other error stops the deploy instead of being
-          # mistaken for a missing image.
+          # Tags are immutable, so only "not found" means build; any other
+          # error stops the deploy rather than looking like a missing image.
           if err=$(aws ecr describe-images --repository-name "$REPOSITORY" \
                --image-ids imageTag="$sha" 2>&1 >/dev/null); then
             echo "Image for $sha already exists; skipping the build"

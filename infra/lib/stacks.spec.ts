@@ -5,27 +5,35 @@ import { FoundationStack } from './foundation-stack';
 import { HostStack } from './host-stack';
 import { UptimeStack } from './uptime-stack';
 
-function synth() {
+interface SynthesizedTemplates {
+  foundation: Template;
+  host: Template;
+  uptime: Template;
+}
+
+function synthesizeTemplates(): SynthesizedTemplates {
   const app = new App();
-  const env = { account: CONFIG.account, region: CONFIG.region };
-  const foundation = new FoundationStack(app, 'Foundation', { env });
-  const host = new HostStack(app, 'Host', {
-    env,
-    repository: foundation.repository,
-    eipAllocationId: foundation.eipAllocationId,
-    alerts: foundation.alerts,
+  const homeEnvironment = { account: CONFIG.account, region: CONFIG.region };
+  const foundationStack = new FoundationStack(app, 'Foundation', {
+    env: homeEnvironment,
   });
-  const uptime = new UptimeStack(app, 'Uptime', {
-    env: { account: CONFIG.account, region: 'us-east-1' },
+  const hostStack = new HostStack(app, 'Host', {
+    env: homeEnvironment,
+    repository: foundationStack.repository,
+    elasticIpAllocationId: foundationStack.elasticIpAllocationId,
+    alerts: foundationStack.alerts,
+  });
+  const uptimeStack = new UptimeStack(app, 'Uptime', {
+    env: { account: CONFIG.account, region: CONFIG.uptimeRegion },
   });
   return {
-    foundation: Template.fromStack(foundation),
-    host: Template.fromStack(host),
-    uptime: Template.fromStack(uptime),
+    foundation: Template.fromStack(foundationStack),
+    host: Template.fromStack(hostStack),
+    uptime: Template.fromStack(uptimeStack),
   };
 }
 
-const { foundation, host, uptime } = synth();
+const { foundation, host, uptime } = synthesizeTemplates();
 
 describe('FoundationStack', () => {
   it('lets only the production environment of this repo assume the deploy role', () => {
@@ -104,13 +112,13 @@ describe('FoundationStack', () => {
 
 describe('HostStack', () => {
   it('opens only the web ports, and no SSH', () => {
-    const groups = host.findResources('AWS::EC2::SecurityGroup');
-    const ingress = Object.values(groups).flatMap(
-      (g) => g.Properties.SecurityGroupIngress ?? [],
+    const securityGroups = host.findResources('AWS::EC2::SecurityGroup');
+    const ingressRules = Object.values(securityGroups).flatMap(
+      (securityGroup) => securityGroup.Properties.SecurityGroupIngress ?? [],
     );
-    const ports = ingress.map(
-      (r: { IpProtocol: string; FromPort: number }) =>
-        `${r.IpProtocol}/${r.FromPort}`,
+    const ports = ingressRules.map(
+      (rule: { IpProtocol: string; FromPort: number }) =>
+        `${rule.IpProtocol}/${rule.FromPort}`,
     );
     expect(ports.sort()).toEqual(['tcp/443', 'tcp/80', 'udp/443']);
   });
@@ -136,7 +144,7 @@ describe('HostStack', () => {
   });
 
   it('recovers on a system check failure and reboots on an instance check failure', () => {
-    const actionsFor = (metricName: string) => {
+    const alarmActionsFor = (metricName: string): string => {
       const [alarm] = Object.values(
         host.findResources('AWS::CloudWatch::Alarm', {
           Properties: { MetricName: metricName },
@@ -144,8 +152,12 @@ describe('HostStack', () => {
       );
       return JSON.stringify(alarm.Properties.AlarmActions);
     };
-    expect(actionsFor('StatusCheckFailed_System')).toContain(':ec2:recover');
-    expect(actionsFor('StatusCheckFailed_Instance')).toContain(':ec2:reboot');
+    expect(alarmActionsFor('StatusCheckFailed_System')).toContain(
+      ':ec2:recover',
+    );
+    expect(alarmActionsFor('StatusCheckFailed_Instance')).toContain(
+      ':ec2:reboot',
+    );
   });
 
   it('uses standard CPU credits so load cannot run up the bill', () => {

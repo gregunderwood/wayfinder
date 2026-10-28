@@ -6,22 +6,16 @@ export interface PageSeo {
   /** Page name only; the site name is appended. Omit on the home page. */
   title?: string;
   description: string;
-  /** Site-relative path; becomes the canonical and og:url. */
+  /** Site-relative, e.g. `/work`. */
   path: string;
   type?: 'website' | 'profile' | 'article';
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
-  /** For pages that must never be indexed: 404s, and later /admin. */
   noindex?: boolean;
 }
 
 const JSON_LD_ID = 'wf-json-ld';
 
-/**
- * The only writer of <head> metadata. Every page calls `set` once with
- * everything it needs; anything not passed is reset rather than left over from
- * the previous route, because a client-side navigation reuses the same
- * document and a stale canonical or JSON-LD block would describe the wrong page.
- */
+// Every tag is rewritten on each call: client-side navigation reuses the document.
 @Injectable({ providedIn: 'root' })
 export class SeoService {
   private readonly title = inject(Title);
@@ -30,33 +24,43 @@ export class SeoService {
 
   set(page: PageSeo): void {
     const fullTitle = page.title ? `${page.title} · ${SITE_NAME}` : SITE_NAME;
-    const url = absoluteUrl(page.path);
+    const canonicalUrl = absoluteUrl(page.path);
 
+    this.setTitleAndIndexing(page, fullTitle);
+    this.setSocialTags(page, fullTitle, canonicalUrl);
+    this.setCanonicalLink(canonicalUrl);
+    this.setJsonLd(page.jsonLd);
+  }
+
+  private setTitleAndIndexing(page: PageSeo, fullTitle: string): void {
     this.title.setTitle(fullTitle);
     this.meta.updateTag({ name: 'description', content: page.description });
     this.meta.updateTag({
       name: 'robots',
       content: page.noindex ? 'noindex, nofollow' : 'index, follow',
     });
+  }
 
+  private setSocialTags(
+    page: PageSeo,
+    fullTitle: string,
+    canonicalUrl: string,
+  ): void {
     this.meta.updateTag({ property: 'og:site_name', content: SITE_NAME });
     this.meta.updateTag({ property: 'og:title', content: fullTitle });
     this.meta.updateTag({
       property: 'og:description',
       content: page.description,
     });
-    this.meta.updateTag({ property: 'og:url', content: url });
+    this.meta.updateTag({ property: 'og:url', content: canonicalUrl });
     this.meta.updateTag({
       property: 'og:type',
       content: page.type ?? 'website',
     });
     this.meta.updateTag({ name: 'twitter:card', content: 'summary' });
-
-    this.setCanonical(url);
-    this.setJsonLd(page.jsonLd);
   }
 
-  private setCanonical(url: string): void {
+  private setCanonicalLink(canonicalUrl: string): void {
     let link = this.document.head.querySelector<HTMLLinkElement>(
       'link[rel="canonical"]',
     );
@@ -65,18 +69,17 @@ export class SeoService {
       link.setAttribute('rel', 'canonical');
       this.document.head.appendChild(link);
     }
-    link.setAttribute('href', url);
+    link.setAttribute('href', canonicalUrl);
   }
 
-  private setJsonLd(data: PageSeo['jsonLd']): void {
+  private setJsonLd(jsonLd: PageSeo['jsonLd']): void {
     this.document.getElementById(JSON_LD_ID)?.remove();
-    if (!data) return;
+    if (!jsonLd) return;
     const script = this.document.createElement('script');
     script.id = JSON_LD_ID;
     script.type = 'application/ld+json';
-    // `<` is escaped so a string containing "</script>" cannot close the tag
-    // early and turn content into markup.
-    script.textContent = JSON.stringify(data).replace(/</g, '\\u003c');
+    // Escaping `<` stops a "</script>" in content from closing the tag early.
+    script.textContent = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
     this.document.head.appendChild(script);
   }
 }

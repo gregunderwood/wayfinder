@@ -1,8 +1,4 @@
-/*
- * The whole design system. No CSS framework and no web font: system font
- * stacks cost zero requests, which keeps first paint at the speed of the
- * prerendered HTML itself. Colours are tokens so dark mode is a token swap.
- */
+/* No web font on purpose: system stacks cost zero requests, so first paint is the prerendered HTML. */
 
 :root {
   color-scheme: light dark;
@@ -127,8 +123,6 @@ img {
   }
 }
 
-/* ---- layout ---- */
-
 .wrap {
   width: 100%;
   max-width: var(--page);
@@ -146,8 +140,7 @@ img {
   padding-block: var(--space-5);
 }
 
-/* Drawn as a background inset by the gutter so the rule lines up with the
-   content edge rather than running into the page padding. */
+/* A background, not a border, so the rule stops at the gutter like the content. */
 .section + .section {
   background: linear-gradient(var(--border), var(--border)) no-repeat top
     center / calc(100% - 2 * var(--gutter)) 1px;
@@ -194,8 +187,6 @@ img {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
-/* ---- components shared by several pages ---- */
 
 .card {
   background: var(--surface);
@@ -260,7 +251,6 @@ img {
   color: var(--on-accent);
 }
 
-/* Long-form markdown output. */
 .prose {
   max-width: var(--measure);
 }
@@ -285,8 +275,6 @@ img {
   padding: 0.1em 0.35em;
   border-radius: 4px;
 }
-
-/* ---- print: the résumé page is meant to be printed or saved as PDF ---- */
 
 @media print {
   :root {

@@ -1,7 +1,14 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Project } from '@wayfinder/domain';
 import { PROJECT_KIND_LABELS } from '../content/projects';
+
+const CARD_STACK_LIMIT = 5;
 
 @Component({
   selector: 'wf-project-card',
@@ -17,8 +24,8 @@ import { PROJECT_KIND_LABELS } from '../content/projects';
       </h3>
       <p class="muted">{{ project().tagline }}</p>
       <ul class="chips" aria-label="Stack">
-        @for (item of project().stack.slice(0, 5); track item) {
-          <li class="chip">{{ item }}</li>
+        @for (technology of visibleStack(); track technology) {
+          <li class="chip">{{ technology }}</li>
         }
       </ul>
     </article>
@@ -35,8 +42,7 @@ import { PROJECT_KIND_LABELS } from '../content/projects';
       color: var(--text);
       text-decoration: none;
     }
-    /* The whole card is the click target; the heading link stays the only
-       focusable element so a screen reader hears one link, not three. */
+    /* Stretches the heading link over the card so a screen reader hears one link, not three. */
     h3 a::after {
       content: '';
       position: absolute;
@@ -52,5 +58,8 @@ import { PROJECT_KIND_LABELS } from '../content/projects';
 })
 export class ProjectCard {
   readonly project = input.required<Project>();
+  protected readonly visibleStack = computed(() =>
+    this.project().stack.slice(0, CARD_STACK_LIMIT),
+  );
   protected readonly kindLabels = PROJECT_KIND_LABELS;
 }

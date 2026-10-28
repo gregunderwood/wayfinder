@@ -8,10 +8,11 @@ import {
   input,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import type { Project } from '@wayfinder/domain';
 import { PROJECT_KIND_LABELS, findProject } from '../../content/projects';
 import { renderMarkdown } from '../../core/markdown';
 import { SeoService } from '../../core/seo.service';
-import { projectJsonLd } from '../../core/structured-data';
+import { buildProjectJsonLd } from '../../core/structured-data';
 
 @Component({
   selector: 'wf-work-detail',
@@ -56,8 +57,8 @@ import { projectJsonLd } from '../../core/structured-data';
             }
           </dl>
           <ul class="chips" aria-label="Stack">
-            @for (item of project.stack; track item) {
-              <li class="chip">{{ item }}</li>
+            @for (technology of project.stack; track technology) {
+              <li class="chip">{{ technology }}</li>
             }
           </ul>
         </header>
@@ -97,7 +98,7 @@ import { projectJsonLd } from '../../core/structured-data';
   `,
 })
 export class WorkDetail {
-  /** Bound from the :slug route parameter. */
+  /** Bound from the :slug route parameter by withComponentInputBinding. */
   readonly slug = input.required<string>();
 
   protected readonly project = computed(() => findProject(this.slug()));
@@ -108,30 +109,36 @@ export class WorkDetail {
   protected readonly kindLabels = PROJECT_KIND_LABELS;
 
   private readonly seo = inject(SeoService);
-  private readonly response = inject(RESPONSE_INIT, { optional: true });
+  private readonly responseInit = inject(RESPONSE_INIT, { optional: true });
 
   constructor() {
     effect(() => {
       const project = this.project();
       if (project) {
-        this.seo.set({
-          title: project.name,
-          description: project.tagline,
-          path: `/work/${project.slug}`,
-          type: 'article',
-          jsonLd: projectJsonLd(project),
-        });
-        return;
+        this.describeProject(project);
+      } else {
+        this.answerNotFound();
       }
-      // Known slugs are prerendered; anything else is rendered on request and
-      // must answer 404 so a dead link is not indexed as a real page.
-      if (this.response) this.response.status = 404;
-      this.seo.set({
-        title: 'Not found',
-        description: 'This project does not exist.',
-        path: `/work/${this.slug()}`,
-        noindex: true,
-      });
+    });
+  }
+
+  private describeProject(project: Project): void {
+    this.seo.set({
+      title: project.name,
+      description: project.tagline,
+      path: `/work/${project.slug}`,
+      type: 'article',
+      jsonLd: buildProjectJsonLd(project),
+    });
+  }
+
+  private answerNotFound(): void {
+    if (this.responseInit) this.responseInit.status = 404;
+    this.seo.set({
+      title: 'Not found',
+      description: 'This project does not exist.',
+      path: `/work/${this.slug()}`,
+      noindex: true,
     });
   }
 

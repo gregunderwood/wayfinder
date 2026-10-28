@@ -19,15 +19,15 @@ describe('App shell', () => {
 
   it('offers a skip link that targets the main landmark', () => {
     const host = render();
-    const skip = host.querySelector<HTMLAnchorElement>('a.skip-link');
-    expect(skip?.getAttribute('href')).toBe('#main');
+    const skipLink = host.querySelector<HTMLAnchorElement>('a.skip-link');
+    expect(skipLink?.getAttribute('href')).toBe('#main');
     expect(host.querySelector('main#main')).not.toBeNull();
   });
 
   it('labels the primary navigation and links every top-level page', () => {
     const nav = render().querySelector('nav[aria-label="Primary"]');
-    const labels = Array.from(nav?.querySelectorAll('a') ?? []).map((a) =>
-      a.textContent?.trim(),
+    const labels = Array.from(nav?.querySelectorAll('a') ?? []).map((link) =>
+      link.textContent?.trim(),
     );
     expect(labels).toEqual(['Work', 'About', 'Résumé', 'Contact']);
   });

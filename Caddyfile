@@ -1,5 +1,3 @@
-# One canonical origin. Search engines treat www and apex as two sites unless
-# one permanently redirects to the other.
 www.{$SITE_DOMAIN} {
 	redir https://{$SITE_DOMAIN}{uri} permanent
 }
@@ -8,8 +6,7 @@ www.{$SITE_DOMAIN} {
 	encode zstd gzip
 
 	header {
-		# Long-lived HSTS without `preload`: preloading is effectively
-		# irreversible, so it waits until HTTPS has run cleanly for a while.
+		# No `preload`: it is effectively irreversible.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
@@ -22,8 +19,6 @@ www.{$SITE_DOMAIN} {
 		reverse_proxy api:3000
 	}
 
-	# Caddy passes the original Host header through, which is what the SSR
-	# server's allowed-hosts check validates.
 	handle {
 		reverse_proxy web:4000
 	}

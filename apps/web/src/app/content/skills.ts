@@ -10,7 +10,6 @@ export const SKILL_CATEGORY_LABELS: Record<SkillCategory, string> = {
   [SkillCategory.Mobile]: 'Mobile & devices',
 };
 
-/** Display order: what a reader is hiring for first, the long tail last. */
 export const SKILL_CATEGORY_ORDER: SkillCategory[] = [
   SkillCategory.Ai,
   SkillCategory.Frontend,
@@ -84,15 +83,16 @@ export interface SkillGroup {
   skills: Skill[];
 }
 
+function featuredFirst(first: Skill, second: Skill): number {
+  return Number(second.featured) - Number(first.featured);
+}
+
 export function groupSkills(skills: Skill[]): SkillGroup[] {
   return SKILL_CATEGORY_ORDER.map((category) => ({
     category,
     label: SKILL_CATEGORY_LABELS[category],
-    // Featured first, otherwise authored order.
     skills: skills
       .filter((entry) => entry.category === category)
-      .sort(
-        (first, second) => Number(second.featured) - Number(first.featured),
-      ),
+      .sort(featuredFirst),
   })).filter((group) => group.skills.length > 0);
 }

@@ -13,7 +13,6 @@ export const serverRoutes: ServerRoute[] = [
   },
   { path: 'about', renderMode: RenderMode.Prerender },
   { path: 'resume', renderMode: RenderMode.Prerender },
-  // Rendered per request so a mistyped URL gets a real 404, not a 200 that
-  // search engines index as a duplicate "not found" page.
+  // Per request, because a prerendered page can only be served with a 200.
   { path: '**', renderMode: RenderMode.Server, status: 404 },
 ];

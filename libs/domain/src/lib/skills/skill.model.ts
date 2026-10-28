@@ -11,6 +11,6 @@ export enum SkillCategory {
 export interface Skill {
   name: string;
   category: SkillCategory;
-  /** Current, daily-use tools. Shown first and on the home page. */
+  /** Daily-use tools: listed first and shown on the home page. */
   featured: boolean;
 }

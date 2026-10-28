@@ -1,9 +1,5 @@
 import { ProjectKind, type Project } from '@wayfinder/domain';
 
-/**
- * Hardcoded until the CMS lands, typed against the same `Project` contract the
- * API will serve, so replacing this array with an HTTP call changes no page.
- */
 export const PROJECTS: Project[] = [
   {
     slug: 'gateway',
