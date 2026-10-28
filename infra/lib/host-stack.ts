@@ -10,6 +10,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import { CONFIG } from './config';
@@ -24,9 +25,11 @@ const ROOT_VOLUME_GIB = 20;
 const LOW_CPU_CREDIT_BALANCE = 20;
 
 export interface HostStackProps extends StackProps {
-  readonly repository: ecr.IRepository;
+  readonly webRepository: ecr.IRepository;
+  readonly apiRepository: ecr.IRepository;
   readonly elasticIpAllocationId: string;
   readonly alerts: sns.ITopic;
+  readonly dataVolume: ec2.IVolume;
 }
 
 export class HostStack extends Stack {
@@ -35,8 +38,12 @@ export class HostStack extends Stack {
 
     const vpc = this.createPublicOnlyVpc();
     const securityGroup = this.createWebOnlySecurityGroup(vpc);
-    const instance = this.createWebInstance(vpc, securityGroup);
-    props.repository.grantPull(instance.role);
+    const instance = this.createWebInstance(
+      vpc,
+      securityGroup,
+      props.dataVolume,
+    );
+    this.grantWhatTheHostNeeds(instance.role, props);
     this.acknowledgeInstanceFindings(instance);
 
     new ec2.CfnEIPAssociation(this, 'WebIpAssociation', {
@@ -56,7 +63,7 @@ export class HostStack extends Stack {
     // No NAT gateway: it would cost more per month than the instance.
     const vpc = new ec2.Vpc(this, 'Vpc', {
       ipAddresses: ec2.IpAddresses.cidr(VPC_CIDR),
-      availabilityZones: [`${CONFIG.region}a`],
+      availabilityZones: [CONFIG.availabilityZone],
       natGateways: 0,
       subnetConfiguration: [
         {
@@ -95,9 +102,10 @@ export class HostStack extends Stack {
   private createWebInstance(
     vpc: ec2.IVpc,
     securityGroup: ec2.ISecurityGroup,
+    dataVolume: ec2.IVolume,
   ): ec2.Instance {
     const userData = ec2.UserData.forLinux();
-    userData.addCommands(...buildHostUserData());
+    userData.addCommands(...buildHostUserData(dataVolume.volumeId));
 
     const instance = new ec2.Instance(this, 'Web', {
       vpc,
@@ -114,7 +122,7 @@ export class HostStack extends Stack {
       ssmSessionPermissions: true,
       requireImdsv2: true,
       userData,
-      // User data runs only on first boot; replacing is safe while the host holds no data of its own.
+      // User data runs only on first boot; replacing is safe because the data lives on the separate data volume.
       userDataCausesReplacement: true,
       blockDevices: [
         {
@@ -131,6 +139,70 @@ export class HostStack extends Stack {
     return instance;
   }
 
+  private grantWhatTheHostNeeds(role: iam.IRole, props: HostStackProps): void {
+    props.webRepository.grantPull(role);
+    props.apiRepository.grantPull(role);
+    this.allowWritingAndRestoringBackups(role);
+    props.alerts.grantPublish(role);
+    this.allowAttachingTheDataVolume(role, props.dataVolume);
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'ReadTheDatabasePassword',
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter${CONFIG.databasePasswordParameter}`,
+        ],
+      }),
+    );
+  }
+
+  // Write and read, never delete: versioning plus a 30-day expiry is the only way a backup goes away.
+  private allowWritingAndRestoringBackups(role: iam.IRole): void {
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'WriteAndRestoreBackups',
+        actions: ['s3:PutObject', 's3:GetObject'],
+        resources: [`arn:aws:s3:::${CONFIG.backupBucketName}/*`],
+      }),
+    );
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'FindTheLatestBackup',
+        actions: ['s3:ListBucket'],
+        resources: [`arn:aws:s3:::${CONFIG.backupBucketName}`],
+      }),
+    );
+  }
+
+  // The host attaches the volume itself: on replacement CloudFormation starts the new host before
+  // terminating the old one, so an attachment resource would fail while the old host still holds it.
+  private allowAttachingTheDataVolume(
+    role: iam.IRole,
+    dataVolume: ec2.IVolume,
+  ): void {
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'AttachTheDataVolume',
+        actions: ['ec2:AttachVolume'],
+        resources: [
+          `arn:aws:ec2:${this.region}:${this.account}:volume/${dataVolume.volumeId}`,
+        ],
+      }),
+    );
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'ToTheWebHostOnly',
+        actions: ['ec2:AttachVolume'],
+        resources: [`arn:aws:ec2:${this.region}:${this.account}:instance/*`],
+        conditions: {
+          StringEquals: {
+            [`aws:ResourceTag/${CONFIG.hostTag.key}`]: CONFIG.hostTag.value,
+          },
+        },
+      }),
+    );
+  }
+
   private acknowledgeInstanceFindings(instance: ec2.Instance): void {
     Validations.of(instance).acknowledge(
       {
@@ -141,7 +213,17 @@ export class HostStack extends Stack {
       {
         id: 'AwsSolutions::AwsSolutions-IAM5[Resource::*]',
         reason:
-          'ecr:GetAuthorizationToken does not support resource-level permissions; image pulls themselves are scoped to the one repository.',
+          'ecr:GetAuthorizationToken does not support resource-level permissions; image pulls themselves are scoped to the two repositories.',
+      },
+      {
+        id: `AwsSolutions::AwsSolutions-IAM5[Resource::arn:aws:ec2:${CONFIG.region}:${CONFIG.account}:instance/*]`,
+        reason:
+          'AttachVolume is narrowed by an aws:ResourceTag condition to the web host, so a replacement host can attach the data volume.',
+      },
+      {
+        id: `AwsSolutions::AwsSolutions-IAM5[Resource::arn:aws:s3:::${CONFIG.backupBucketName}/*]`,
+        reason:
+          'Backups are written under a timestamped key per run; the object wildcard is limited to the one backup bucket.',
       },
       {
         id: 'AwsSolutions::AwsSolutions-EC28',

@@ -78,14 +78,14 @@ review a step against it.
 
 ### How this phase is built
 
-- **On a branch, `phase-3-cms`, tested locally until the whole phase is done.** `main` stays
-  what production runs; only a merge to `main` deploys, so nothing in this phase reaches
-  underwoodstyles.ca until the CMS works end to end on the dev box. A fix the live site needs
-  meanwhile goes to `main` and the branch rebases onto it.
-- **Local runs the same containers as production:** `docker compose` with web, api, Postgres
-  and Caddy, plus the Nx dev servers for fast iteration.
-- **Merging is the release:** the production infrastructure (3.6) is deployed first by hand,
-  then the merge ships the code, then migrations run once (3.7).
+- **The plumbing ships first.** The API, Postgres, the data volume and backups (3.1 and 3.6)
+  go to production before any table exists, so the pipeline is proven while there is nothing
+  to lose.
+- **Then one PR per step, each deploying when it merges.** Every step is built and tested
+  locally against the same containers production runs (`docker compose` with web, api,
+  Postgres and Caddy), then reviewed as a PR against [CMS.md](CMS.md). Admin features stay
+  unreachable in production until the step that exposes them is complete.
+- **Infrastructure changes are deployed by hand** before the PR that needs them merges.
 
 ### Shape
 
@@ -109,20 +109,21 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
   redeploy. Home, About, Resume and Skills stay prerendered unless they start showing CMS data.
 - **Secrets never enter the repo or GitHub.** The database password and JWT signing keys are
   SSM SecureString parameters; the deploy script has the host read them into `.env`.
-- **Migrations are a deliberate step.** Deploys don't run them automatically; a `migrate` flag
-  on the Deploy workflow does, and every migration must pass `run → revert → run` in CI.
+- **Migrations are a deliberate step.** Deploys don't run them; they are run by hand on the host
+  (`migrate:show`, then `migrate:run`), and every migration must pass `run → revert → run` in
+  the server tests.
 
 ### Steps
 
-| Step   | What                                                                                                                                                                      |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1 ✅ | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database               |
-| 3.2    | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth              |
-| 3.3    | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                               |
-| 3.4    | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                                   |
-| 3.5    | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                                 |
-| 3.6    | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, API image built and shipped by Deploy, `migrate` flag; restore drill |
-| 3.7    | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live                         |
+| Step   | What                                                                                                                                                                                          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 ✅ | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database                                   |
+| 3.2    | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth                                  |
+| 3.3    | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                                                   |
+| 3.4    | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                                                       |
+| 3.5    | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                                                     |
+| 3.6    | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, API image built and shipped by Deploy, migrations run by hand on the host; restore drill |
+| 3.7    | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live                                             |
 
 **Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
 a deploy; and a deleted database can be restored from last night's backup.

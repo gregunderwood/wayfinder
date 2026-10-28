@@ -2,6 +2,8 @@
 export const CONFIG = {
   account: '742188596859',
   region: 'ca-central-1',
+  // The data volume and the host must share one zone; an EBS volume cannot attach across zones.
+  availabilityZone: 'ca-central-1a',
   // Route 53 publishes health check metrics only here, and an alarm can notify only a topic in its own region.
   uptimeRegion: 'us-east-1',
   domain: 'underwoodstyles.ca',
@@ -15,6 +17,11 @@ export const CONFIG = {
   // The deploy role finds the host by tag rather than by ID, so the instance can be replaced without touching the foundation stack.
   hostTag: { key: 'wayfinder:role', value: 'web' },
   appDirectory: '/opt/wayfinder',
+  dataDirectory: '/var/lib/wayfinder',
+  dataVolumeGib: 10,
+  databasePasswordParameter: '/wayfinder/production/database-password',
+  backupBucketName: 'wayfinder-backups-742188596859',
+  backupRetentionDays: 30,
   // Amazon Linux does not package the Compose plugin, so the release binary is downloaded and verified.
   compose: {
     version: 'v5.6.1',

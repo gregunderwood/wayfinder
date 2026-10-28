@@ -19,9 +19,11 @@ function synthesizeTemplates(): SynthesizedTemplates {
   });
   const hostStack = new HostStack(app, 'Host', {
     env: homeEnvironment,
-    repository: foundationStack.repository,
+    webRepository: foundationStack.webRepository,
+    apiRepository: foundationStack.apiRepository,
     elasticIpAllocationId: foundationStack.elasticIpAllocationId,
     alerts: foundationStack.alerts,
+    dataVolume: foundationStack.dataVolume,
   });
   const uptimeStack = new UptimeStack(app, 'Uptime', {
     env: { account: CONFIG.account, region: CONFIG.uptimeRegion },
@@ -82,11 +84,67 @@ describe('FoundationStack', () => {
     });
   });
 
-  it('keeps the IP and image repository if the stack is ever deleted', () => {
+  it('keeps the IP and both image repositories if the stack is ever deleted', () => {
     foundation.hasResource('AWS::EC2::EIP', { DeletionPolicy: 'Retain' });
-    foundation.hasResource('AWS::ECR::Repository', {
+    const repositories = foundation.findResources('AWS::ECR::Repository', {
       DeletionPolicy: 'Retain',
       Properties: Match.objectLike({ ImageTagMutability: 'IMMUTABLE' }),
+    });
+    expect(
+      Object.values(repositories).map(
+        (repository) => repository.Properties.RepositoryName,
+      ),
+    ).toEqual(['wayfinder/web', 'wayfinder/api']);
+  });
+
+  it('keeps an encrypted data volume in the host zone if the stack is ever deleted', () => {
+    foundation.hasResource('AWS::EC2::Volume', {
+      DeletionPolicy: 'Retain',
+      Properties: Match.objectLike({
+        AvailabilityZone: CONFIG.availabilityZone,
+        Encrypted: true,
+      }),
+    });
+  });
+
+  it('keeps backups private, encrypted, versioned and for 30 days', () => {
+    foundation.hasResource('AWS::S3::Bucket', {
+      DeletionPolicy: 'Retain',
+      Properties: Match.objectLike({
+        BucketName: CONFIG.backupBucketName,
+        VersioningConfiguration: { Status: 'Enabled' },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+        BucketEncryption: Match.objectLike({
+          ServerSideEncryptionConfiguration: [
+            Match.objectLike({
+              ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' },
+            }),
+          ],
+        }),
+        LifecycleConfiguration: {
+          Rules: [
+            Match.objectLike({
+              ExpirationInDays: 30,
+              NoncurrentVersionExpiration: { NoncurrentDays: 30 },
+            }),
+          ],
+        },
+      }),
+    });
+    foundation.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+          }),
+        ]),
+      }),
     });
   });
 
@@ -134,6 +192,19 @@ describe('HostStack', () => {
     host.hasResourceProperties('AWS::EC2::LaunchTemplate', {
       LaunchTemplateData: { MetadataOptions: { HttpTokens: 'required' } },
     });
+  });
+
+  it('lets the host read only the database password, and never delete a backup', () => {
+    const policies = JSON.stringify(host.findResources('AWS::IAM::Policy'));
+    expect(policies).toContain(`parameter${CONFIG.databasePasswordParameter}`);
+    expect(policies).not.toMatch(/ssm:GetParameters?ByPath|ssm:\*/);
+    expect(policies).not.toMatch(/s3:Delete|s3:\*/);
+  });
+
+  it('formats the data volume only when it has no filesystem', () => {
+    const [instance] = Object.values(host.findResources('AWS::EC2::Instance'));
+    const userData = JSON.stringify(instance.Properties.UserData);
+    expect(userData).toContain('blkid \\"$device\\" || mkfs.ext4');
   });
 
   it('verifies the Compose download before installing it', () => {

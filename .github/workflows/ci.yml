@@ -58,6 +58,9 @@ jobs:
           docker build -f Dockerfile.web -t "$WEB_IMAGE" .
           docker build -f Dockerfile.server -t "$API_IMAGE" .
 
+      - name: Check the production compose override
+        run: docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
+
       - name: Start the stack behind Caddy
         run: docker compose up -d --wait --wait-timeout 120
 

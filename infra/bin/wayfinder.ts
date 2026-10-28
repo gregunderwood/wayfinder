@@ -13,9 +13,11 @@ const foundationStack = new FoundationStack(app, 'WayfinderFoundation', {
 });
 new HostStack(app, 'WayfinderHost', {
   env: homeEnvironment,
-  repository: foundationStack.repository,
+  webRepository: foundationStack.webRepository,
+  apiRepository: foundationStack.apiRepository,
   elasticIpAllocationId: foundationStack.elasticIpAllocationId,
   alerts: foundationStack.alerts,
+  dataVolume: foundationStack.dataVolume,
 });
 new UptimeStack(app, 'WayfinderUptime', {
   env: { account: CONFIG.account, region: CONFIG.uptimeRegion },

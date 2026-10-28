@@ -22,8 +22,9 @@ concurrency:
 
 env:
   AWS_REGION: ca-central-1
-  REPOSITORY: wayfinder/web
   SITE_DOMAIN: underwoodstyles.ca
+  BACKUP_BUCKET: wayfinder-backups-742188596859
+  ALERTS_TOPIC_ARN: arn:aws:sns:ca-central-1:742188596859:wayfinder-alerts
 
 # Actions are pinned by SHA: this job holds AWS credentials, and tags can move.
 jobs:
@@ -48,37 +49,51 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
-      - name: Resolve image
-        id: image
+      - name: Find images already built
+        id: images
         run: |
-          sha=$(git rev-parse HEAD)
-          echo "ref=${{ steps.ecr.outputs.registry }}/$REPOSITORY:$sha" >> "$GITHUB_OUTPUT"
-          # Tags are immutable, so only "not found" means build; any other
-          # error stops the deploy rather than looking like a missing image.
-          if err=$(aws ecr describe-images --repository-name "$REPOSITORY" \
-               --image-ids imageTag="$sha" 2>&1 >/dev/null); then
-            echo "Image for $sha already exists; skipping the build"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          elif ! grep -q ImageNotFoundException <<<"$err"; then
-            echo "$err"
-            exit 1
-          fi
+          tag=$(git rev-parse HEAD)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          for image in web api; do
+            # Tags are immutable, so only "not found" means build; any other
+            # error stops the deploy rather than looking like a missing image.
+            if error=$(aws ecr describe-images --repository-name "wayfinder/$image" \
+                 --image-ids imageTag="$tag" 2>&1 >/dev/null); then
+              echo "The $image image for $tag already exists; skipping its build"
+              echo "${image}_exists=true" >> "$GITHUB_OUTPUT"
+            elif ! grep -q ImageNotFoundException <<<"$error"; then
+              echo "$error"
+              exit 1
+            fi
+          done
 
-      - if: steps.image.outputs.exists != 'true'
+      - if: steps.images.outputs.web_exists != 'true' || steps.images.outputs.api_exists != 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - if: steps.image.outputs.exists != 'true'
+      - if: steps.images.outputs.web_exists != 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Dockerfile.web
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.image.outputs.ref }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.ecr.outputs.registry }}/wayfinder/web:${{ steps.images.outputs.tag }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - if: steps.images.outputs.api_exists != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.server
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/wayfinder/api:${{ steps.images.outputs.tag }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
       - name: Roll out
         env:
-          IMAGE: ${{ steps.image.outputs.ref }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.images.outputs.tag }}
         run: .github/scripts/deploy-to-host.sh

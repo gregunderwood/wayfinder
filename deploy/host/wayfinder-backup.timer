@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly wayfinder database backup
+
+[Timer]
+# 02:30 Pacific in standard time.
+OnCalendar=*-*-* 10:30:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

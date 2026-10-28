@@ -3,6 +3,7 @@ import {
   Duration,
   Fn,
   RemovalPolicy,
+  Size,
   Stack,
   StackProps,
   Validations,
@@ -12,6 +13,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 import { CONFIG } from './config';
@@ -24,9 +26,11 @@ const ACTUAL_SPEND_ALERT_PERCENT = 80;
 const FORECAST_SPEND_ALERT_PERCENT = 100;
 
 export class FoundationStack extends Stack {
-  readonly repository: ecr.IRepository;
+  readonly webRepository: ecr.IRepository;
+  readonly apiRepository: ecr.IRepository;
   readonly elasticIpAllocationId: string;
   readonly alerts: sns.ITopic;
+  readonly dataVolume: ec2.IVolume;
 
   constructor(scope: Construct, id: string, props: StackProps) {
     // Recreating the zone changes its nameservers at the registrar, and recreating the IP breaks DNS.
@@ -40,14 +44,21 @@ export class FoundationStack extends Stack {
     this.pointDomainAt(zone, elasticIp);
     this.allowOnlyLetsEncryptCertificates(zone);
 
-    this.repository = this.createImageRepository();
-    const deployRole = this.createGitHubDeployRole(this.repository);
+    this.webRepository = this.createImageRepository('WebRepository', 'web');
+    this.apiRepository = this.createImageRepository('ApiRepository', 'api');
+    const deployRole = this.createGitHubDeployRole([
+      this.webRepository,
+      this.apiRepository,
+    ]);
+
+    this.dataVolume = this.createDataVolume();
+    const backupBucket = this.createBackupBucket();
 
     const alerts = this.createAlertsTopic();
     this.alerts = alerts;
     this.addMonthlyBudget(alerts);
 
-    this.addOutputs(zone, elasticIp, deployRole, alerts);
+    this.addOutputs(zone, elasticIp, deployRole, alerts, backupBucket);
   }
 
   private createElasticIp(): ec2.CfnEIP {
@@ -84,9 +95,12 @@ export class FoundationStack extends Stack {
     });
   }
 
-  private createImageRepository(): ecr.Repository {
-    return new ecr.Repository(this, 'WebRepository', {
-      repositoryName: 'wayfinder/web',
+  private createImageRepository(
+    constructId: string,
+    imageName: string,
+  ): ecr.Repository {
+    return new ecr.Repository(this, constructId, {
+      repositoryName: `wayfinder/${imageName}`,
       // Tags are git SHAs; rollback by SHA relies on a tag never moving.
       imageTagMutability: ecr.TagMutability.IMMUTABLE,
       imageScanOnPush: true,
@@ -97,7 +111,43 @@ export class FoundationStack extends Stack {
     });
   }
 
-  private createGitHubDeployRole(repository: ecr.IRepository): iam.Role {
+  private createDataVolume(): ec2.Volume {
+    return new ec2.Volume(this, 'DataVolume', {
+      volumeName: 'wayfinder-data',
+      availabilityZone: CONFIG.availabilityZone,
+      size: Size.gibibytes(CONFIG.dataVolumeGib),
+      volumeType: ec2.EbsDeviceVolumeType.GP3,
+      encrypted: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+  }
+
+  private createBackupBucket(): s3.Bucket {
+    const backupBucket = new s3.Bucket(this, 'BackupBucket', {
+      bucketName: CONFIG.backupBucketName,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      versioned: true,
+      lifecycleRules: [
+        {
+          expiration: Duration.days(CONFIG.backupRetentionDays),
+          noncurrentVersionExpiration: Duration.days(
+            CONFIG.backupRetentionDays,
+          ),
+        },
+      ],
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    Validations.of(backupBucket).acknowledge({
+      id: 'AwsSolutions::AwsSolutions-S1',
+      reason:
+        'Only the host role writes here and only the owner reads; CloudTrail records both, and access logs would need a second bucket.',
+    });
+    return backupBucket;
+  }
+
+  private createGitHubDeployRole(repositories: ecr.IRepository[]): iam.Role {
     const githubOidcProvider = new iam.OidcProviderNative(this, 'GitHubOidc', {
       url: `https://${GITHUB_OIDC_ISSUER}`,
       clientIds: [STS_AUDIENCE],
@@ -119,9 +169,11 @@ export class FoundationStack extends Stack {
       ),
     });
 
-    repository.grantPullPush(deployRole);
-    // A deploy skips the build when the SHA is already pushed; pushing an immutable tag again fails.
-    repository.grant(deployRole, 'ecr:DescribeImages');
+    for (const repository of repositories) {
+      repository.grantPullPush(deployRole);
+      // A deploy skips the build when the SHA is already pushed; pushing an immutable tag again fails.
+      repository.grant(deployRole, 'ecr:DescribeImages');
+    }
     this.allowRunningCommandsOnTheWebHost(deployRole);
     this.acknowledgeDeployRoleWildcards(deployRole);
     return deployRole;
@@ -237,6 +289,7 @@ export class FoundationStack extends Stack {
     elasticIp: ec2.CfnEIP,
     deployRole: iam.Role,
     alerts: sns.Topic,
+    backupBucket: s3.Bucket,
   ): void {
     new CfnOutput(this, 'NameServers', {
       description: 'Set these as custom DNS nameservers at Namecheap',
@@ -244,9 +297,14 @@ export class FoundationStack extends Stack {
     });
     new CfnOutput(this, 'PublicIp', { value: elasticIp.attrPublicIp });
     new CfnOutput(this, 'RepositoryUri', {
-      value: this.repository.repositoryUri,
+      value: this.webRepository.repositoryUri,
     });
+    new CfnOutput(this, 'ApiRepositoryUri', {
+      value: this.apiRepository.repositoryUri,
+    });
+
     new CfnOutput(this, 'DeployRoleArn', { value: deployRole.roleArn });
     new CfnOutput(this, 'AlertsTopicArn', { value: alerts.topicArn });
+    new CfnOutput(this, 'BackupBucketName', { value: backupBucket.bucketName });
   }
 }

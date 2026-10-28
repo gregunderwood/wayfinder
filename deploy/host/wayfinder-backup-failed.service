@@ -1,0 +1,7 @@
+[Unit]
+Description=Alert that the wayfinder database backup failed
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/wayfinder/backup.env
+ExecStart=/usr/bin/bash -c 'aws sns publish --region "$AWS_REGION" --topic-arn "$ALERTS_TOPIC_ARN" --subject "wayfinder backup failed" --message "The nightly database backup failed on $(hostname). See: journalctl -u wayfinder-backup"'
