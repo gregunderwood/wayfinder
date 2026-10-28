@@ -1,10 +1,23 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { databaseOptions, readDatabaseConfig } from '../database';
+import { ApiExceptionFilter } from './common/api-exception.filter';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    // The repo-root .env is the one local file shared with Docker Compose and
+    // the TypeORM CLI. In a container there is none and the environment wins.
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        databaseOptions(readDatabaseConfig((name) => config.get<string>(name))),
+    }),
+    HealthModule,
+  ],
+  providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })
 export class AppModule {}

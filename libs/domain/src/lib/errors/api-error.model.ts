@@ -5,7 +5,14 @@
  */
 export enum ApiErrorCode {
   ValidationFailed = 'VALIDATION_FAILED',
+  /** A 4xx with no more specific code. */
+  BadRequest = 'BAD_REQUEST',
   NotFound = 'NOT_FOUND',
+  /** No valid session. Distinct from InvalidCredentials, which is a failed sign-in. */
+  Unauthorized = 'UNAUTHORIZED',
+  Forbidden = 'FORBIDDEN',
+  /** Anything unexpected. The detail is in the server log, never the response. */
+  Internal = 'INTERNAL',
   InvalidCredentials = 'INVALID_CREDENTIALS',
   /** Password was right; the second factor is still owed. Not a failure to show as one. */
   TotpRequired = 'TOTP_REQUIRED',

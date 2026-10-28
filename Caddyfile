@@ -18,7 +18,13 @@ www.{$SITE_DOMAIN} {
 		-Server
 	}
 
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
 	# Caddy passes the original Host header through, which is what the SSR
 	# server's allowed-hosts check validates.
-	reverse_proxy web:4000
+	handle {
+		reverse_proxy web:4000
+	}
 }

@@ -48,7 +48,7 @@ vitest.config.*.timestamp*
 .angular
 
 # wayfinder
-apps/server/.env
+/.env
 uploads/
 
 # CDK synth output

@@ -7,7 +7,13 @@
     "node": ">=22.0.0 <23.0.0",
     "npm": ">=10.0.0"
   },
-  "scripts": {},
+  "scripts": {
+    "typeorm": "ts-node -r tsconfig-paths/register --project apps/server/tsconfig.app.json ./node_modules/typeorm/cli.js -d apps/server/src/typeorm.config.ts",
+    "migration:generate": "npm run typeorm -- migration:generate",
+    "migration:show": "npm run typeorm -- migration:show",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert"
+  },
   "dependencies": {
     "@angular-devkit/build-angular": "~20.3.0",
     "@angular/common": "~20.3.0",
@@ -19,12 +25,18 @@
     "@angular/router": "~20.3.0",
     "@angular/ssr": "~20.3.0",
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
     "express": "^4.21.2",
     "marked": "^18.1.2",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "~7.8.0",
+    "typeorm": "^0.3.31",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
@@ -56,6 +68,7 @@
     "@swc/helpers": "~0.5.11",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "@typescript-eslint/utils": "^8.40.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.0.0",
@@ -72,6 +85,8 @@
     "jsdom": "~22.1.0",
     "nx": "22.0.3",
     "prettier": "^3.3.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tslib": "^2.3.0",
     "tsx": "^4.23.15",
     "typescript": "~5.9.2",

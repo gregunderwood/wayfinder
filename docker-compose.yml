@@ -1,7 +1,9 @@
-# Production stack for one host. The deploy pipeline writes WEB_IMAGE (an
-# immutable, SHA-tagged image) and SITE_DOMAIN to the .env next to this file.
+# Production stack for one host. The deploy pipeline writes the images
+# (immutable, SHA-tagged), SITE_DOMAIN and DATABASE_PASSWORD to the .env next to
+# this file. Locally, .env.example points COMPOSE_FILE at this file plus
+# docker-compose.local.yml, which builds the images and publishes Postgres.
 # No ACME email is set: Let's Encrypt no longer sends expiry notices, and
-# Caddy renews on its own. The API and Postgres join here in Phase 3.
+# Caddy renews on its own.
 
 # Docker keeps container logs forever by default; on a 20 GB disk that is an
 # outage on a timer. Cap each service at 3 × 10 MB.
@@ -42,6 +44,63 @@ services:
       retries: 3
       start_period: 10s
 
+  api:
+    image: ${API_IMAGE:?set API_IMAGE to the image to run}
+    restart: unless-stopped
+    logging: *logging
+    init: true
+    expose:
+      - '3000'
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    # /api/health answers 200 even with the database down (restarting the API
+    # would not bring it back), so this checks that Nest is serving.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    logging: *logging
+    # Reachable only from the other containers; no port is published.
+    expose:
+      - '5432'
+    environment:
+      POSTGRES_USER: wayfinder
+      POSTGRES_DB: wayfinder
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+    volumes:
+      # Postgres 18 keeps its data in a versioned subdirectory of this path, so
+      # a future major upgrade can sit beside the old cluster on one volume.
+      - postgres_data:/var/lib/postgresql
+    mem_limit: 512m
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'wayfinder', '-d', 'wayfinder']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   caddy:
     image: caddy:2.11.7-alpine
     restart: unless-stopped
@@ -58,10 +117,13 @@ services:
       # Encrypt rate-limits a domain that does it repeatedly.
       - caddy_data:/data
       - caddy_config:/config
+    # Not on the API: a failed API should cost /api a 502, not take the
+    # prerendered public site down with it.
     depends_on:
       web:
         condition: service_healthy
 
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:

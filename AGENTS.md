@@ -26,6 +26,7 @@ npx nx test server --coverage         # also the gate: thresholds are checked ON
 npx nx e2e web-e2e                    # Cypress
 npx prettier --write .                # format
 npx nx run infra:synth                # synthesize the AWS stacks + cdk-nag checks
+docker compose up -d --build --wait   # full local stack at https://localhost (cp .env.example .env first)
 ```
 
 - **`npx nx run-many -t lint,test,build` is the final step before declaring work done.** Not

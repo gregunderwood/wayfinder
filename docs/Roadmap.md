@@ -111,15 +111,15 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
 
 ### Steps
 
-| Step | What                                                                                                                                                        |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1  | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database |
-| 3.2  | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, optional TOTP, rate-limited login; 90% coverage on auth              |
-| 3.3  | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                 |
-| 3.4  | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                     |
-| 3.5  | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                   |
-| 3.6  | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, `migrate` flag on Deploy; restore drill                |
-| 3.7  | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live           |
+| Step   | What                                                                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 ✅ | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database               |
+| 3.2    | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, optional TOTP, rate-limited login; 90% coverage on auth                            |
+| 3.3    | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                               |
+| 3.4    | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                                   |
+| 3.5    | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                                 |
+| 3.6    | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, API image built and shipped by Deploy, `migrate` flag; restore drill |
+| 3.7    | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live                         |
 
 **Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
 a deploy; and a deleted database can be restored from last night's backup.
