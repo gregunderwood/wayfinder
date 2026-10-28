@@ -2,8 +2,8 @@
 
 ## What it is
 
-Vitest, colocated `*.spec.ts`, with coverage **thresholds** on the two server paths where a bug
-costs the most: `src/app/auth/**` (a hole in admin login) and `src/app/posts/**` (lost or
+Vitest, colocated `*.spec.ts`. Server tests run against real Postgres, with coverage
+**thresholds** on the two server paths where a bug costs the most: `src/app/auth/**` (a hole in admin login) and `src/app/posts/**` (lost or
 prematurely published writing), at 90% lines / 90% functions / 85% branches / 90% statements.
 Cypress covers route visibility end to end.
 
@@ -29,12 +29,27 @@ Vitest globals are on: `describe`, `it`, `expect` and `vi` need no import.
 
 1. **Pure decision functions** — slug generation, publish/schedule state, token expiry, reading
    time. No mocks; time is a parameter.
-2. **Service tests with hand-rolled fakes.** `new PostsService(fakeRepo, new FixedClock(NOW))` —
-   no `@nestjs/testing` module compilation.
+2. **Service tests against real Postgres.**
+   `new PostsService(db.repository(PostEntity), new FixedClock(NOW))`: a real repository on the
+   test database, no fake repositories or data sources, and no `@nestjs/testing` module
+   compilation. A fake cannot fail a unique index, a foreign key or a migration, and those are
+   where persistence bugs live.
 3. **Cypress route visibility.** Every route asserted for three cases: unauthenticated visitor,
    authenticated admin, and admin-only route hit while logged out.
 
 Angular component tests use `provideZonelessChangeDetection()`.
+
+### The test database
+
+`npx nx test server` needs Postgres running (`docker compose up -d --wait postgres`); CI's `main`
+job starts it as a service. A Vitest global setup creates a template database
+(`wayfinder_test_template`), runs every migration into it from the same `migrations/index.ts`
+list the image uses, and gives each test worker its own copy (`CREATE DATABASE … TEMPLATE`), so
+files run in parallel without sharing rows. Tables are truncated between tests. Test databases
+are dropped at the end, and the development database is never touched.
+
+A case that needs the database _unreachable_ points a real connection at a port with nothing
+listening, rather than faking the failure.
 
 ## Patterns to follow
 
@@ -44,7 +59,10 @@ Angular component tests use `provideZonelessChangeDetection()`.
 it('does not list a scheduled post before its publish time', ...)
 ```
 
-### ✅ Hand-rolled fakes over deep mock chains
+### ✅ Real collaborators over mocks
+
+The database is real. Something outside the system (the clock, email delivery, an S3 client) is
+replaced by a small hand-written class, never a deep `vi.fn()` chain.
 
 ### ❌ Don't let a spec depend on wall-clock time
 
@@ -52,8 +70,10 @@ it('does not list a scheduled post before its publish time', ...)
 
 ## Pitfalls
 
-- **A mocked repository cannot fail a database constraint.** Where a unique index carries the
-  guarantee (slugs), verify against real Postgres.
+- **`connect ECONNREFUSED 127.0.0.1:5432` in the server tests.** Postgres is not running; start
+  it with `docker compose up -d --wait postgres`.
+- **A migration missing from `migrations/index.ts` fails the tests,** because the test database
+  is built from that list. That is deliberate: the image uses the same list.
 - **Coverage thresholds only run under `--coverage`.** That is why it is part of the gate.
 
 ## When to update this file

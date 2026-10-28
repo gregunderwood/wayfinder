@@ -11,8 +11,8 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1 built.** Sections 3.2–3.5 are the agreed design, not yet code. Items under
-[Open questions](#open-questions) are not decided; a step does not settle one silently.
+Status: **3.1 built.** Sections 3.2–3.5 are the agreed design, not yet code. Anything listed
+under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
 
@@ -178,7 +178,8 @@ is a 400.
 - **A draft never leaves through a public endpoint.** The published filter lives in one
   repository query used by both public routes, not in each controller.
 - **A published slug is a URL.** Renaming it is rejected with a 400 while the project is
-  published; unpublish first, knowing old links will 404.
+  published; unpublish first, knowing old links will 404. Redirects from old slugs are not
+  planned; they get built if a rename is ever needed.
 - **The slug's uniqueness is the database's job.** The service checks first so the common case
   gets a clean `SlugTaken`, but the unique index is the guarantee, and a constraint violation maps
   to the same 409.
@@ -189,9 +190,9 @@ rows through the same reviewed path. The server cannot import `apps/web/.../cont
 (apps never import each other), so a one-off script generates the migration's SQL from that file
 and the generated migration is what is committed and reviewed.
 
-**Tests.** Service tests with fakes cover the rules above. Slug uniqueness and the published
-filter are also verified against real Postgres in the CI migration job, since a fake repository
-cannot fail a constraint. `src/app/projects/**` joins the coverage `include` list.
+**Tests.** Every rule above is tested against real Postgres (see
+[Testing](Testing.md#the-test-database)), so the unique index and the published filter are
+exercised as they run in production. `src/app/projects/**` joins the coverage `include` list.
 
 ### 3.4 Admin UI
 
@@ -312,12 +313,7 @@ A copy of the `refresh_tokens` table, or a backup of it, must not be enough to s
 
 ## Open questions
 
-Decided by the owner, then moved into the section above:
-
-1. **Renaming a published slug:** rejected while published (this design), or allowed with the old
-   slug kept as a permanent redirect.
-2. **API integration tests against real Postgres:** inside the CI migration job (this design), or
-   a separate `*.int-spec.ts` suite runnable locally.
+None. A new one goes here, and is decided by the owner before the step that needs it.
 
 ## When to update this file
 

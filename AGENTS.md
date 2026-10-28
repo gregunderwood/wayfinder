@@ -34,6 +34,8 @@ docker compose up -d --build --wait   # full local stack at https://localhost (c
   `test` alone: Vitest transpiles without typechecking, so only the webpack/Angular builds catch
   a type error.
 - **And `npx nx test server --coverage`**, which is where the thresholds are actually checked.
+- **Server tests run against real Postgres**, so the gate needs `docker compose up -d --wait postgres`
+  first. No fake repositories; see [docs/Testing.md](docs/Testing.md#the-test-database).
 - Node 22 via nvm (`.nvmrc`). A fresh non-login shell may not have `node` on `PATH`; run
   `. ~/.nvm/nvm.sh && nvm use` first.
 - There is no `serve` on `libs/domain`; it is consumed through the `@wayfinder/domain` alias.
