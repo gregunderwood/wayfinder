@@ -6,19 +6,21 @@ import { HostStack } from '../lib/host-stack';
 import { UptimeStack } from '../lib/uptime-stack';
 
 const app = new App();
-const env = { account: CONFIG.account, region: CONFIG.region };
+const homeEnvironment = { account: CONFIG.account, region: CONFIG.region };
 
-const foundation = new FoundationStack(app, 'WayfinderFoundation', { env });
+const foundationStack = new FoundationStack(app, 'WayfinderFoundation', {
+  env: homeEnvironment,
+});
 new HostStack(app, 'WayfinderHost', {
-  env,
-  repository: foundation.repository,
-  eipAllocationId: foundation.eipAllocationId,
-  alerts: foundation.alerts,
+  env: homeEnvironment,
+  webRepository: foundationStack.webRepository,
+  apiRepository: foundationStack.apiRepository,
+  elasticIpAllocationId: foundationStack.elasticIpAllocationId,
+  alerts: foundationStack.alerts,
+  dataVolume: foundationStack.dataVolume,
 });
 new UptimeStack(app, 'WayfinderUptime', {
-  env: { account: CONFIG.account, region: 'us-east-1' },
+  env: { account: CONFIG.account, region: CONFIG.uptimeRegion },
 });
 
-// Every synth is checked against the AWS Solutions rules; anything accepted
-// deliberately is acknowledged next to the resource, with its reason.
 Validations.of(app).addPlugins(new AwsSolutionsChecks(app, { verbose: true }));

@@ -1,0 +1,9 @@
+# Data lives on the retained EBS volume, so a replaced host keeps the database and certificates.
+services:
+  postgres:
+    volumes:
+      - /var/lib/wayfinder/postgres:/var/lib/postgresql
+
+  caddy:
+    volumes:
+      - /var/lib/wayfinder/caddy:/data

@@ -5,27 +5,37 @@ import { FoundationStack } from './foundation-stack';
 import { HostStack } from './host-stack';
 import { UptimeStack } from './uptime-stack';
 
-function synth() {
+interface SynthesizedTemplates {
+  foundation: Template;
+  host: Template;
+  uptime: Template;
+}
+
+function synthesizeTemplates(): SynthesizedTemplates {
   const app = new App();
-  const env = { account: CONFIG.account, region: CONFIG.region };
-  const foundation = new FoundationStack(app, 'Foundation', { env });
-  const host = new HostStack(app, 'Host', {
-    env,
-    repository: foundation.repository,
-    eipAllocationId: foundation.eipAllocationId,
-    alerts: foundation.alerts,
+  const homeEnvironment = { account: CONFIG.account, region: CONFIG.region };
+  const foundationStack = new FoundationStack(app, 'Foundation', {
+    env: homeEnvironment,
   });
-  const uptime = new UptimeStack(app, 'Uptime', {
-    env: { account: CONFIG.account, region: 'us-east-1' },
+  const hostStack = new HostStack(app, 'Host', {
+    env: homeEnvironment,
+    webRepository: foundationStack.webRepository,
+    apiRepository: foundationStack.apiRepository,
+    elasticIpAllocationId: foundationStack.elasticIpAllocationId,
+    alerts: foundationStack.alerts,
+    dataVolume: foundationStack.dataVolume,
+  });
+  const uptimeStack = new UptimeStack(app, 'Uptime', {
+    env: { account: CONFIG.account, region: CONFIG.uptimeRegion },
   });
   return {
-    foundation: Template.fromStack(foundation),
-    host: Template.fromStack(host),
-    uptime: Template.fromStack(uptime),
+    foundation: Template.fromStack(foundationStack),
+    host: Template.fromStack(hostStack),
+    uptime: Template.fromStack(uptimeStack),
   };
 }
 
-const { foundation, host, uptime } = synth();
+const { foundation, host, uptime } = synthesizeTemplates();
 
 describe('FoundationStack', () => {
   it('lets only the production environment of this repo assume the deploy role', () => {
@@ -74,11 +84,67 @@ describe('FoundationStack', () => {
     });
   });
 
-  it('keeps the IP and image repository if the stack is ever deleted', () => {
+  it('keeps the IP and both image repositories if the stack is ever deleted', () => {
     foundation.hasResource('AWS::EC2::EIP', { DeletionPolicy: 'Retain' });
-    foundation.hasResource('AWS::ECR::Repository', {
+    const repositories = foundation.findResources('AWS::ECR::Repository', {
       DeletionPolicy: 'Retain',
       Properties: Match.objectLike({ ImageTagMutability: 'IMMUTABLE' }),
+    });
+    expect(
+      Object.values(repositories).map(
+        (repository) => repository.Properties.RepositoryName,
+      ),
+    ).toEqual(['wayfinder/web', 'wayfinder/api']);
+  });
+
+  it('keeps an encrypted data volume in the host zone if the stack is ever deleted', () => {
+    foundation.hasResource('AWS::EC2::Volume', {
+      DeletionPolicy: 'Retain',
+      Properties: Match.objectLike({
+        AvailabilityZone: CONFIG.availabilityZone,
+        Encrypted: true,
+      }),
+    });
+  });
+
+  it('keeps backups private, encrypted, versioned and for 30 days', () => {
+    foundation.hasResource('AWS::S3::Bucket', {
+      DeletionPolicy: 'Retain',
+      Properties: Match.objectLike({
+        BucketName: CONFIG.backupBucketName,
+        VersioningConfiguration: { Status: 'Enabled' },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+        BucketEncryption: Match.objectLike({
+          ServerSideEncryptionConfiguration: [
+            Match.objectLike({
+              ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' },
+            }),
+          ],
+        }),
+        LifecycleConfiguration: {
+          Rules: [
+            Match.objectLike({
+              ExpirationInDays: 30,
+              NoncurrentVersionExpiration: { NoncurrentDays: 30 },
+            }),
+          ],
+        },
+      }),
+    });
+    foundation.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Deny',
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+          }),
+        ]),
+      }),
     });
   });
 
@@ -104,13 +170,13 @@ describe('FoundationStack', () => {
 
 describe('HostStack', () => {
   it('opens only the web ports, and no SSH', () => {
-    const groups = host.findResources('AWS::EC2::SecurityGroup');
-    const ingress = Object.values(groups).flatMap(
-      (g) => g.Properties.SecurityGroupIngress ?? [],
+    const securityGroups = host.findResources('AWS::EC2::SecurityGroup');
+    const ingressRules = Object.values(securityGroups).flatMap(
+      (securityGroup) => securityGroup.Properties.SecurityGroupIngress ?? [],
     );
-    const ports = ingress.map(
-      (r: { IpProtocol: string; FromPort: number }) =>
-        `${r.IpProtocol}/${r.FromPort}`,
+    const ports = ingressRules.map(
+      (rule: { IpProtocol: string; FromPort: number }) =>
+        `${rule.IpProtocol}/${rule.FromPort}`,
     );
     expect(ports.sort()).toEqual(['tcp/443', 'tcp/80', 'udp/443']);
   });
@@ -128,6 +194,19 @@ describe('HostStack', () => {
     });
   });
 
+  it('lets the host read only the database password, and never delete a backup', () => {
+    const policies = JSON.stringify(host.findResources('AWS::IAM::Policy'));
+    expect(policies).toContain(`parameter${CONFIG.databasePasswordParameter}`);
+    expect(policies).not.toMatch(/ssm:GetParameters?ByPath|ssm:\*/);
+    expect(policies).not.toMatch(/s3:Delete|s3:\*/);
+  });
+
+  it('formats the data volume only when it has no filesystem', () => {
+    const [instance] = Object.values(host.findResources('AWS::EC2::Instance'));
+    const userData = JSON.stringify(instance.Properties.UserData);
+    expect(userData).toContain('blkid \\"$device\\" || mkfs.ext4');
+  });
+
   it('verifies the Compose download before installing it', () => {
     const [instance] = Object.values(host.findResources('AWS::EC2::Instance'));
     const userData = JSON.stringify(instance.Properties.UserData);
@@ -136,7 +215,7 @@ describe('HostStack', () => {
   });
 
   it('recovers on a system check failure and reboots on an instance check failure', () => {
-    const actionsFor = (metricName: string) => {
+    const alarmActionsFor = (metricName: string): string => {
       const [alarm] = Object.values(
         host.findResources('AWS::CloudWatch::Alarm', {
           Properties: { MetricName: metricName },
@@ -144,8 +223,12 @@ describe('HostStack', () => {
       );
       return JSON.stringify(alarm.Properties.AlarmActions);
     };
-    expect(actionsFor('StatusCheckFailed_System')).toContain(':ec2:recover');
-    expect(actionsFor('StatusCheckFailed_Instance')).toContain(':ec2:reboot');
+    expect(alarmActionsFor('StatusCheckFailed_System')).toContain(
+      ':ec2:recover',
+    );
+    expect(alarmActionsFor('StatusCheckFailed_Instance')).toContain(
+      ':ec2:reboot',
+    );
   });
 
   it('uses standard CPU credits so load cannot run up the bill', () => {

@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the wayfinder database to S3
+OnFailure=wayfinder-backup-failed.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/wayfinder/backup.env
+ExecStart=/opt/wayfinder/host/backup-database.sh

@@ -12,7 +12,10 @@ moderating testimonials. One Nx workspace, three projects plus an e2e suite.
 - [../apps/web/src/app/app.config.server.ts](../apps/web/src/app/app.config.server.ts) — SSR providers, merged on top
 - [../apps/web/src/app/app.routes.server.ts](../apps/web/src/app/app.routes.server.ts) — which routes prerender, which render per request, which are client-only
 - [../apps/web/src/server.ts](../apps/web/src/server.ts) — the Express SSR host
-- [../apps/server/src/main.ts](../apps/server/src/main.ts) — API bootstrap, global `/api` prefix
+- [../apps/server/src/main.ts](../apps/server/src/main.ts) — API bootstrap, global `/api` prefix, `migrate:*` commands
+- [../apps/server/src/database.ts](../apps/server/src/database.ts) — the one Postgres config shared by the API, the bundled migration runner and the TypeORM CLI
+- [../apps/server/src/app/common/api-exception.filter.ts](../apps/server/src/app/common/api-exception.filter.ts) — turns every thrown error into an `ApiError` body
+- [../docker-compose.yml](../docker-compose.yml) / [../Caddyfile](../Caddyfile) — the production stack; Caddy sends `/api/*` to the API and everything else to SSR
 - [../libs/domain/src/index.ts](../libs/domain/src/index.ts) — the shared contract and its invariant
 
 ## How it works
@@ -54,7 +57,11 @@ and the same config works on any host — the hosting choice is still open.
 
 - **Anything touching `window`, `document` or `localStorage` breaks prerender.** Guard with
   `isPlatformBrowser` or `afterNextRender`, or keep it in an admin-only route.
-- **The dev proxy (`apps/web/proxy.conf.json`) and the API port must agree.**
+- **The dev proxy (`apps/web/proxy.conf.json`) and the API port must agree.** Both are 3000, as
+  is the Caddyfile's upstream.
+- **A new entity or migration must be listed by hand** (`ENTITIES` in `database.ts`,
+  `migrations/index.ts`). The API is a webpack bundle with no directory to glob, so a missed one
+  works from source and is silently absent from the image.
 
 ## When to update this file
 

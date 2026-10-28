@@ -3,7 +3,7 @@ import { EDUCATION, EARLIER_ROLES, ROLES } from '../../content/experience';
 import { SKILLS, groupSkills } from '../../content/skills';
 import { SeoService } from '../../core/seo.service';
 import { AVAILABILITY, PERSON, SITE_URL } from '../../core/site.config';
-import { personJsonLd } from '../../core/structured-data';
+import { buildPersonJsonLd } from '../../core/structured-data';
 
 @Component({
   selector: 'wf-resume',
@@ -47,8 +47,8 @@ import { personJsonLd } from '../../core/structured-data';
             </div>
             <p>{{ role.summary }}</p>
             <ul>
-              @for (item of role.highlights; track item) {
-                <li>{{ item }}</li>
+              @for (highlight of role.highlights; track highlight) {
+                <li>{{ highlight }}</li>
               }
             </ul>
           </section>
@@ -58,7 +58,7 @@ import { personJsonLd } from '../../core/structured-data';
       <section class="section" aria-labelledby="earlier">
         <h2 id="earlier">Earlier work</h2>
         <ul class="earlier">
-          @for (role of earlier; track role.company) {
+          @for (role of earlierRoles; track role.company) {
             <li>
               <strong>{{ role.company }}</strong>
               <span class="period">{{ role.period }}</span> — {{ role.line }}
@@ -73,7 +73,7 @@ import { personJsonLd } from '../../core/structured-data';
           @for (group of skillGroups; track group.category) {
             <div>
               <dt>{{ group.label }}</dt>
-              <dd>{{ joinNames(group.skills) }}</dd>
+              <dd>{{ joinSkillNames(group.skills) }}</dd>
             </div>
           }
         </dl>
@@ -182,7 +182,7 @@ export class Resume {
   protected readonly siteUrl = SITE_URL;
   protected readonly siteHost = new URL(SITE_URL).host;
   protected readonly roles = ROLES;
-  protected readonly earlier = EARLIER_ROLES;
+  protected readonly earlierRoles = EARLIER_ROLES;
   protected readonly education = EDUCATION;
   protected readonly skillGroups = groupSkills(SKILLS);
 
@@ -193,16 +193,16 @@ export class Resume {
         'Résumé of Greg Underwood, full-stack software engineer: Sign In Solutions, BMC Software and twenty years across Angular, Node, Rails and AWS.',
       path: '/resume',
       type: 'profile',
-      jsonLd: personJsonLd(),
+      jsonLd: buildPersonJsonLd(),
     });
   }
 
-  protected joinNames(skills: { name: string }[]): string {
+  protected joinSkillNames(skills: { name: string }[]): string {
     return skills.map((skill) => skill.name).join(', ');
   }
 
   protected print(): void {
-    // Only reachable from a click, which only happens in a browser.
+    // Safe without a platform check: clicks never happen during server rendering.
     window.print();
   }
 }

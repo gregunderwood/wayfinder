@@ -4,13 +4,16 @@ import { provideRouter } from '@angular/router';
 import { WorkDetail } from './work-detail';
 
 describe('WorkDetail', () => {
-  function render(slug: string, response: ResponseInit | null = null) {
+  function render(
+    slug: string,
+    responseInit: ResponseInit | null = null,
+  ): HTMLElement {
     TestBed.configureTestingModule({
       imports: [WorkDetail],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([]),
-        { provide: RESPONSE_INIT, useValue: response },
+        { provide: RESPONSE_INIT, useValue: responseInit },
       ],
     });
     const fixture = TestBed.createComponent(WorkDetail);
@@ -26,9 +29,9 @@ describe('WorkDetail', () => {
   });
 
   it('answers 404 for an unknown slug instead of a soft 200', () => {
-    const response: ResponseInit = {};
-    const host = render('does-not-exist', response);
+    const responseInit: ResponseInit = {};
+    const host = render('does-not-exist', responseInit);
     expect(host.querySelector('h1')?.textContent).toBe('No such project');
-    expect(response.status).toBe(404);
+    expect(responseInit.status).toBe(404);
   });
 });

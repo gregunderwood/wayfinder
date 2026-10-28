@@ -18,13 +18,11 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideClientHydration(withEventReplay()),
     provideBrowserGlobalErrorListeners(),
-    // Signals and OnPush throughout, so zone.js would only add weight.
     provideZonelessChangeDetection(),
     provideRouter(
       appRoutes,
       withComponentInputBinding(),
-      // Without this a link from the bottom of one page lands at the bottom of
-      // the next, and /about#skills does not scroll to the section.
+      // The router's default keeps the previous scroll position and ignores #fragments.
       withInMemoryScrolling({
         scrollPositionRestoration: 'enabled',
         anchorScrolling: 'enabled',

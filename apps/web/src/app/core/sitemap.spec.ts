@@ -1,9 +1,9 @@
 import { PROJECTS } from '../content/projects';
-import { buildSitemap, sitemapPaths } from './sitemap';
+import { buildSitemap, listSitemapPaths } from './sitemap';
 
 describe('sitemap', () => {
   it('lists every project page, so publishing one cannot skip the sitemap', () => {
-    const paths = sitemapPaths();
+    const paths = listSitemapPaths();
     for (const project of PROJECTS) {
       expect(paths).toContain(`/work/${project.slug}`);
     }

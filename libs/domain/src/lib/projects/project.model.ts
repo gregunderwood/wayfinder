@@ -1,4 +1,3 @@
-/** Why the work exists, which changes how a reader weighs it. */
 export enum ProjectKind {
   Employment = 'employment',
   Volunteer = 'volunteer',
@@ -6,21 +5,21 @@ export enum ProjectKind {
 }
 
 export interface Project {
-  /** URL segment under /work; unique, and stable once published or links break. */
+  /** Unique; cannot change while published, or links break. */
   slug: string;
   name: string;
-  /** One sentence. Doubles as the meta description, so keep it under ~160 characters. */
+  /** Doubles as the meta description; at most 160 characters. */
   tagline: string;
   kind: ProjectKind;
-  /** What Greg did, not the team's title: "Sole developer", "Lead developer". */
+  /** Greg's own role, not the team's: "Sole developer". */
   role: string;
-  /** Human-readable span, e.g. "2024 – present". */
+  /** Display text, e.g. "2024 – present". */
   period: string;
   stack: string[];
   bodyMarkdown: string;
   liveUrl?: string;
   repoUrl?: string;
-  /** Public documentation, for work whose live product sits behind a login. */
+  /** Public docs, for work whose product sits behind a login. */
   docsUrl?: string;
   featured: boolean;
   sortOrder: number;

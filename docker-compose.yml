@@ -1,10 +1,6 @@
-# Production stack for one host. The deploy pipeline writes WEB_IMAGE (an
-# immutable, SHA-tagged image) and SITE_DOMAIN to the .env next to this file.
-# No ACME email is set: Let's Encrypt no longer sends expiry notices, and
-# Caddy renews on its own. The API and Postgres join here in Phase 3.
+# No ACME email: Let's Encrypt no longer sends expiry notices.
 
-# Docker keeps container logs forever by default; on a 20 GB disk that is an
-# outage on a timer. Cap each service at 3 × 10 MB.
+# Docker never rotates container logs by default, and the disk is 20 GB.
 x-logging: &logging
   driver: json-file
   options:
@@ -16,13 +12,10 @@ services:
     image: ${WEB_IMAGE:?set WEB_IMAGE to the image to run}
     restart: unless-stopped
     logging: *logging
-    # Node as PID 1 ignores SIGTERM, so every stop would wait out the 10 s kill
-    # timeout. tini forwards the signal and reaps zombies.
+    # Node as PID 1 ignores SIGTERM.
     init: true
     expose:
       - '4000'
-    # The container needs nothing writable and no Linux capabilities; if the
-    # process is ever compromised it cannot modify its own code or escalate.
     read_only: true
     tmpfs:
       - /tmp
@@ -42,6 +35,62 @@ services:
       retries: 3
       start_period: 10s
 
+  api:
+    image: ${API_IMAGE:?set API_IMAGE to the image to run}
+    restart: unless-stopped
+    logging: *logging
+    init: true
+    expose:
+      - '3000'
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_USER: wayfinder
+      DATABASE_NAME: wayfinder
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    # Passes with the database down: restarting the API would not fix that.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    logging: *logging
+    expose:
+      - '5432'
+    environment:
+      POSTGRES_USER: wayfinder
+      POSTGRES_DB: wayfinder
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+    volumes:
+      # Postgres 18 images keep data in a versioned subdirectory of this path.
+      - postgres_data:/var/lib/postgresql
+    mem_limit: 512m
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'wayfinder', '-d', 'wayfinder']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   caddy:
     image: caddy:2.11.7-alpine
     restart: unless-stopped
@@ -54,14 +103,15 @@ services:
       SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN, e.g. underwoodstyles.ca}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates live here. Losing this volume means re-issuing, and Let's
-      # Encrypt rate-limits a domain that does it repeatedly.
+      # Holds the certificates; Let's Encrypt rate-limits re-issuing them.
       - caddy_data:/data
       - caddy_config:/config
+    # Not on the API: an API failure must not take the public site down.
     depends_on:
       web:
         condition: service_healthy
 
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:

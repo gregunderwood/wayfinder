@@ -1,12 +1,13 @@
 import type { Project } from '@wayfinder/domain';
 import { PERSON, SITE_URL, absoluteUrl } from './site.config';
 
-/** schema.org Person, referenced by id from every other block so crawlers join them. */
-export function personJsonLd(): Record<string, unknown> {
+const PERSON_ID = `${SITE_URL}/#person`;
+
+export function buildPersonJsonLd(): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'Person',
-    '@id': `${SITE_URL}/#person`,
+    '@id': PERSON_ID,
     name: PERSON.name,
     jobTitle: PERSON.jobTitle,
     email: `mailto:${PERSON.email}`,
@@ -20,14 +21,14 @@ export function personJsonLd(): Record<string, unknown> {
   };
 }
 
-export function projectJsonLd(project: Project): Record<string, unknown> {
+export function buildProjectJsonLd(project: Project): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
     name: project.name,
     description: project.tagline,
     url: absoluteUrl(`/work/${project.slug}`),
-    creator: { '@id': `${SITE_URL}/#person` },
+    creator: { '@id': PERSON_ID },
     keywords: project.stack.join(', '),
     ...(project.liveUrl ? { sameAs: project.liveUrl } : {}),
   };

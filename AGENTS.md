@@ -11,6 +11,7 @@ argues against the person it is meant to hire, so "it renders" is not the bar.
 - **Any code changes** → Read [./docs/Code Quality.md](./docs/Code%20Quality.md) (TS strict, explicit return types, DTO/interface split, comments policy)
 - Where a thing belongs, the three projects, SSR, the API seam → Read [./docs/Architecture.md](./docs/Architecture.md)
 - The Angular app, routes, SEO, the admin area → Read [./docs/Web App.md](./docs/Web%20App.md)
+- The CMS: auth, admin API, Projects, anything in Phase 3 → Read [./docs/CMS.md](./docs/CMS.md)
 - Tests (`*.spec.ts`), coverage, Cypress → Read [./docs/Testing.md](./docs/Testing.md)
 - AWS, `infra/`, deploys, rollback, alerts, the host → Read [./docs/Deployment.md](./docs/Deployment.md)
 - "What's next" / "where were we" → Read [./docs/Roadmap.md](./docs/Roadmap.md)
@@ -26,12 +27,15 @@ npx nx test server --coverage         # also the gate: thresholds are checked ON
 npx nx e2e web-e2e                    # Cypress
 npx prettier --write .                # format
 npx nx run infra:synth                # synthesize the AWS stacks + cdk-nag checks
+docker compose up -d --build --wait   # full local stack at https://localhost (cp .env.example .env first)
 ```
 
 - **`npx nx run-many -t lint,test,build` is the final step before declaring work done.** Not
   `test` alone: Vitest transpiles without typechecking, so only the webpack/Angular builds catch
   a type error.
 - **And `npx nx test server --coverage`**, which is where the thresholds are actually checked.
+- **Server tests run against real Postgres**, so the gate needs `docker compose up -d --wait postgres`
+  first. No fake repositories; see [docs/Testing.md](docs/Testing.md#the-test-database).
 - Node 22 via nvm (`.nvmrc`). A fresh non-login shell may not have `node` on `PATH`; run
   `. ~/.nvm/nvm.sh && nvm use` first.
 - There is no `serve` on `libs/domain`; it is consumed through the `@wayfinder/domain` alias.
@@ -63,15 +67,17 @@ See [docs/Code Quality.md](docs/Code%20Quality.md) for full details.
 - Prettier: single quotes, 2 spaces
 - Tests colocated as `*.spec.ts`, Vitest only — no Jest artifacts anywhere
 
-## Comments
+## Comments and naming
 
-- **Do** record why a line must be this way and what breaks if it changes — the failure being
-  prevented. A future session re-deriving the reason from scratch is the cost being avoided.
-- **Don't** restate what the code says.
-- **Don't** reference tickets, PRs, phases-in-flight, or "as discussed" — the docs and the commit
-  history are the time capsule. A comment reads as current understanding.
-- **Don't** speculate about future problems. If it becomes real, fix it then.
-- If a block needs a paragraph to explain _what it does_, simplify the block.
+See [docs/Code Quality.md](docs/Code%20Quality.md#code-reads-like-a-story) for full details.
+
+- **Code reads like a story.** Descriptive names (no `db`, `err`, `res`, `m`), small functions
+  at one level of detail, named constants and named conditions.
+- **Comments are an absolute minimum**: only where the code cannot explain itself (an outside
+  constraint, or a deliberate choice that looks like a bug). One line, saying why. This applies
+  to YAML, Dockerfiles, the Caddyfile and scripts too.
+- Contract doc comments in `libs/domain` stay only when they state a rule the type can't express.
+- **Don't** reference tickets, PRs, phases, or "as discussed".
 
 ## Commits
 

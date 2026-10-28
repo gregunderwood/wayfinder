@@ -25,10 +25,7 @@ export default [
               onlyDependOnLibsWithTags: ['type:domain'],
             },
             {
-              // The invariant that lets @wayfinder/domain be imported by both
-              // the browser bundle and the API: interfaces, enums and consts
-              // only. A decorator or an rxjs import here would drag a server
-              // or framework runtime into the other side's build.
+              // Imported by both the browser and the API, so no runtime may leak in.
               sourceTag: 'type:domain',
               onlyDependOnLibsWithTags: ['type:domain'],
               bannedExternalImports: [
@@ -45,18 +42,5 @@ export default [
         },
       ],
     },
-  },
-  {
-    files: [
-      '**/*.ts',
-      '**/*.tsx',
-      '**/*.cts',
-      '**/*.mts',
-      '**/*.js',
-      '**/*.jsx',
-      '**/*.cjs',
-      '**/*.mjs',
-    ],
-    rules: {},
   },
 ];

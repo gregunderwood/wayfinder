@@ -4,7 +4,7 @@ import { projectsInOrder } from '../../content/projects';
 import { SKILLS } from '../../content/skills';
 import { SeoService } from '../../core/seo.service';
 import { AVAILABILITY, PERSON } from '../../core/site.config';
-import { personJsonLd } from '../../core/structured-data';
+import { buildPersonJsonLd } from '../../core/structured-data';
 import { ProjectCard } from '../../shared/project-card';
 
 @Component({
@@ -64,7 +64,7 @@ import { ProjectCard } from '../../shared/project-card';
     <section class="section wrap" aria-labelledby="work">
       <h2 id="work">Selected work</h2>
       <div class="grid">
-        @for (project of featured; track project.slug) {
+        @for (project of featuredProjects; track project.slug) {
           <wf-project-card [project]="project" />
         }
       </div>
@@ -116,7 +116,9 @@ import { ProjectCard } from '../../shared/project-card';
 export class Home {
   protected readonly person = PERSON;
   protected readonly availability = AVAILABILITY;
-  protected readonly featured = projectsInOrder().filter((p) => p.featured);
+  protected readonly featuredProjects = projectsInOrder().filter(
+    (project) => project.featured,
+  );
   protected readonly dailySkills = SKILLS.filter((skill) => skill.featured);
 
   constructor() {
@@ -125,7 +127,7 @@ export class Home {
         'Greg Underwood is a full-stack software engineer in BC, Canada, combining twenty years across Rails, Node, Angular and AWS with AI agent workflows. Open to remote work.',
       path: '/',
       type: 'profile',
-      jsonLd: personJsonLd(),
+      jsonLd: buildPersonJsonLd(),
     });
   }
 }

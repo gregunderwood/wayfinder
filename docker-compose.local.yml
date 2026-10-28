@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+
+  postgres:
+    ports:
+      - '127.0.0.1:5432:5432'

@@ -1,7 +1,3 @@
-/**
- * Résumé content. Hardcoded until the CMS lands; it is read by the résumé page
- * and nowhere else, so its shape is local to the web app rather than shared.
- */
 export interface Role {
   company: string;
   /** Former names or acquirers, shown after the company. */
