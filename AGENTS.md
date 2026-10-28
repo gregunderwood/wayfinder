@@ -11,6 +11,7 @@ argues against the person it is meant to hire, so "it renders" is not the bar.
 - **Any code changes** → Read [./docs/Code Quality.md](./docs/Code%20Quality.md) (TS strict, explicit return types, DTO/interface split, comments policy)
 - Where a thing belongs, the three projects, SSR, the API seam → Read [./docs/Architecture.md](./docs/Architecture.md)
 - The Angular app, routes, SEO, the admin area → Read [./docs/Web App.md](./docs/Web%20App.md)
+- The CMS: auth, admin API, Projects, anything in Phase 3 → Read [./docs/CMS.md](./docs/CMS.md)
 - Tests (`*.spec.ts`), coverage, Cypress → Read [./docs/Testing.md](./docs/Testing.md)
 - AWS, `infra/`, deploys, rollback, alerts, the host → Read [./docs/Deployment.md](./docs/Deployment.md)
 - "What's next" / "where were we" → Read [./docs/Roadmap.md](./docs/Roadmap.md)

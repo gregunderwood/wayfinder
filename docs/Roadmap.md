@@ -73,6 +73,9 @@ itself, and rolling back is one command.
 
 ## Phase 3 — CMS
 
+How each step is designed (tables, endpoints, cookies, render modes) is in [CMS.md](CMS.md);
+review a step against it.
+
 ### How this phase is built
 
 - **On a branch, `phase-3-cms`, tested locally until the whole phase is done.** `main` stays
