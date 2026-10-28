@@ -7,16 +7,16 @@ database-free, Phase 2 deploys it, and the CMS arrives underneath a site that is
 
 ## Status
 
-| Phase | Outcome                                                                                                            | State    |
-| ----- | ------------------------------------------------------------------------------------------------------------------ | -------- |
-| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done** |
-| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done** |
-| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done** |
-| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | Next     |
-| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |          |
-| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |          |
-| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |          |
-| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |          |
+| Phase | Outcome                                                                                                            | State                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done**                               |
+| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done**                               |
+| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done**                               |
+| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | **In progress** (branch `phase-3-cms`) |
+| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |                                        |
+| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |                                        |
+| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |                                        |
+| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |                                        |
 
 Deployment moved up from last to Phase 2: a repo that is public and on a résumé should point at a
 live site, and a static, database-free site is the simplest thing this project will ever deploy.
@@ -70,6 +70,68 @@ itself, and rolling back is one command.
   cache. Uploads arrive in Phase 6 and go to S3 then.
 - **A database.** Phase 3.
 - **Email.** SES arrives with the contact form in Phase 5.
+
+## Phase 3 — CMS
+
+### How this phase is built
+
+- **On a branch, `phase-3-cms`, tested locally until the whole phase is done.** `main` stays
+  what production runs; only a merge to `main` deploys, so nothing in this phase reaches
+  underwoodstyles.ca until the CMS works end to end on the dev box. A fix the live site needs
+  meanwhile goes to `main` and the branch rebases onto it.
+- **Local runs the same containers as production:** `docker compose` with web, api, Postgres
+  and Caddy, plus the Nx dev servers for fast iteration.
+- **Merging is the release:** the production infrastructure (3.6) is deployed first by hand,
+  then the merge ships the code, then migrations run once (3.7).
+
+### Shape
+
+```
+caddy :443 ─┬─ /api/*  ──► api :3000 (NestJS) ──► postgres :5432
+            └─ else    ──► web :4000 (Angular SSR) ──(server-side fetch)──► api
+postgres data ──► EBS volume in WayfinderFoundation (retained; survives host rebuilds)
+nightly pg_dump ──► S3 bucket (versioned, 30-day expiry)
+secrets ──► SSM Parameter Store (SecureString), read by the host at deploy time
+```
+
+### Decisions
+
+- **Postgres in Compose on a retained EBS volume, not RDS.** RDS would roughly double the
+  monthly bill for one admin user. The data volume lives in the foundation stack, so replacing
+  the host re-attaches it instead of losing it. Caddy's certificates move onto it too.
+  Backups: nightly `pg_dump` to S3, plus a restore drill that is actually run before cutover.
+- **Pages that show CMS data render on request; the rest stay prerendered.** CI has no
+  database, so project pages (and anything listing projects) are server-rendered per request
+  from the API. Visitors and crawlers still get full HTML, and an admin edit is live without a
+  redeploy. Home, About, Resume and Skills stay prerendered unless they start showing CMS data.
+- **Secrets never enter the repo or GitHub.** The database password and JWT signing keys are
+  SSM SecureString parameters; the deploy script has the host read them into `.env`.
+- **Migrations are a deliberate step.** Deploys don't run them automatically; a `migrate` flag
+  on the Deploy workflow does, and every migration must pass `run → revert → run` in CI.
+
+### Steps
+
+| Step | What                                                                                                                                                        |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1  | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database |
+| 3.2  | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, optional TOTP, rate-limited login; 90% coverage on auth              |
+| 3.3  | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                 |
+| 3.4  | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                     |
+| 3.5  | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                   |
+| 3.6  | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, `migrate` flag on Deploy; restore drill                |
+| 3.7  | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live           |
+
+**Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
+a deploy; and a deleted database can be restored from last night's backup.
+
+### Deliberately not in Phase 3
+
+- **A staging environment.** Today a merge to `main` goes straight to production, guarded by
+  CI, container healthchecks and automatic rollback. Later: deploy every merge to a staging
+  host first, then promote that same image to production with an explicit approval (a GitHub
+  environment with a required reviewer, or a manual "promote" workflow). Images are already
+  tagged by SHA, so promotion is a redeploy of the tested tag, not a rebuild. Worth doing before
+  the starter (Phase 7) is offered to anyone else.
 
 ## Phase 7 — Starter
 
