@@ -1,5 +1,6 @@
 import * as pg from 'pg';
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
+import { AdminUserEntity, RefreshTokenEntity } from './app/auth/models';
 import * as migrations from './migrations';
 
 export type EnvLookup = (name: string) => string | undefined;
@@ -22,7 +23,10 @@ const CONNECTION_TIMEOUT_MS = 5_000;
 const QUERY_TIMEOUT_MS = 5_000;
 
 // Listed by hand: the API is a webpack bundle with no directory to glob.
-export const ENTITIES: NonNullable<PostgresConnectionOptions['entities']> = [];
+export const ENTITIES: NonNullable<PostgresConnectionOptions['entities']> = [
+  AdminUserEntity,
+  RefreshTokenEntity,
+];
 
 export function readDatabaseConfig(env: EnvLookup): DatabaseConfig {
   return {

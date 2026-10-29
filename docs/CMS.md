@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1 built.** Sections 3.2–3.5 are the agreed design, not yet code. Anything listed
+Status: **3.1 and 3.2 built.** Sections 3.3–3.5 are the agreed design, not yet code. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -23,13 +23,18 @@ Built:
 - [../apps/server/src/main.ts](../apps/server/src/main.ts) — bootstrap and the `node main.js <command>` CLI
 - [../apps/server/src/app/common/api-exception.filter.ts](../apps/server/src/app/common/api-exception.filter.ts) — the `ApiError` response shape
 - [../libs/domain/src/lib/errors/api-error.model.ts](../libs/domain/src/lib/errors/api-error.model.ts) — `ApiErrorCode`
+- [../apps/server/src/app/configure-app.ts](../apps/server/src/app/configure-app.ts) — global prefix, `trust proxy`, cookies, validation; shared by `main.ts` and the API tests
+- [../apps/server/src/app/common/clock.ts](../apps/server/src/app/common/clock.ts) — `Clock`, `SystemClock`, and `FixedClock` for tests
+- [../apps/server/src/app/common/data-cipher.ts](../apps/server/src/app/common/data-cipher.ts) — layer-3 encryption
+- [../apps/server/src/app/common/json-only-writes.guard.ts](../apps/server/src/app/common/json-only-writes.guard.ts) — the CSRF rule
+- [../apps/server/src/app/auth/](../apps/server/src/app/auth/) — module, controller, `auth.service.ts` (sessions), `admin-accounts.service.ts` (the account), `access-tokens.ts`, `admin.guard.ts`, `current-user.decorator.ts`, `session-cookies.ts`, `models.ts`, `dto/`
+- [../apps/server/src/create-admin.ts](../apps/server/src/create-admin.ts) — the `create-admin` command
+- [../libs/domain/src/lib/auth/auth.model.ts](../libs/domain/src/lib/auth/auth.model.ts) — `LoginPayload`, `AdminProfile`
 
 Planned (the path is part of the design):
 
-- `apps/server/src/app/common/clock.ts` — `Clock`, `SystemClock`, and `FixedClock` for tests
-- `apps/server/src/app/auth/` — module, controller, service, `models.ts`, `jwt.strategy.ts`, `admin.guard.ts`, `current-user.decorator.ts`, `dto/`
 - `apps/server/src/app/projects/` — module, public and admin controllers, service, `models.ts`, `dto/`
-- `libs/domain/src/lib/auth/auth.model.ts`, and additions to `projects/project.model.ts`
+- Additions to `libs/domain/src/lib/projects/project.model.ts`
 - `apps/web/src/app/core/api.service.ts`, `core/api-error.interceptor.ts`, `core/auth/`
 - `apps/web/src/app/features/admin/` — `login`, `projects` (list and editor)
 
@@ -45,8 +50,8 @@ Database conventions: uuid primary keys (`gen_random_uuid()`), `snake_case` colu
 explicit `name:`, `timestamptz` only, and named indexes (`ix_projects_slug`). Each new entity is
 added to `ENTITIES` and each migration to `migrations/index.ts` by hand.
 
-Commands run in the image as `node main.js <command>`: `migrate:show|run|revert` (built) and
-`create-admin` (3.2). None runs on deploy by itself.
+Commands run in the image as `node main.js <command>`: `migrate:show|run|revert` and
+`create-admin`. None runs on deploy by itself.
 
 ### Sensitive data
 
@@ -58,10 +63,12 @@ not enough to read it or to sign in. There are three layers, and every new colum
    everything, but only against someone holding the raw disk.
 2. **What only needs verifying is hashed, not encrypted:** passwords (argon2id) and refresh tokens
    (SHA-256). Anything that can be decrypted can leak; a hash cannot be turned back.
-3. **What must be read back is encrypted by the API before it is stored:** AES-256-GCM through a
-   TypeORM column transformer in `common/encrypted-column.ts`. The key, `DATA_ENCRYPTION_KEY`, is
-   an SSM SecureString, so it is never in the database or its backups. Each value is stored with
-   the id of the key that encrypted it, so the key can be rotated.
+3. **What must be read back is encrypted by the API before it is stored:** AES-256-GCM through
+   `DataCipher` in `common/data-cipher.ts`, called by the service that owns the column, which is
+   named `encrypted_<field>`. The key, `DATA_ENCRYPTION_KEY`, is an SSM SecureString, so it is
+   never in the database or its backups. Each value is stored with the id of the key that
+   encrypted it (a prefix of the key's SHA-256), so a value under a rotated-out key fails loudly
+   instead of decrypting to garbage.
 
 | Data                                                       | Layer | Lands         |
 | ---------------------------------------------------------- | ----- | ------------- |
@@ -88,11 +95,15 @@ contact and testimonial forms needs it.
 
 | Table            | Columns                                                                                                           |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `admin_users`    | `id`, `email` (encrypted, lowercased first), `password_hash`, `last_login_at`, `created_at`, `updated_at`         |
+| `admin_users`    | `id`, `encrypted_email` (lowercased first), `password_hash`, `last_login_at`, `created_at`, `updated_at`          |
 | `refresh_tokens` | `id`, `admin_user_id` (FK, cascade), `family_id`, `token_hash` (unique), `expires_at`, `revoked_at`, `created_at` |
 
+A unique index on a constant (`ux_admin_users_single_admin`) makes a second admin row impossible,
+not just unused.
+
 **Creating the admin.** `node main.js create-admin --email <address>` reads the password from
-stdin without echo, so it never lands in shell history or `ps`. It refuses if an admin already
+stdin (without echo, and twice, on a terminal), so it never lands in shell history or `ps`.
+Passwords are at least 12 characters. It refuses if an admin already
 exists; `--reset-password` replaces the hash and revokes every refresh token. There is no seeded
 account and no default password anywhere.
 
@@ -102,10 +113,13 @@ whether the account exists.
 
 **Sessions.** Two cookies, both `HttpOnly` and `Secure`:
 
-| Cookie       | Holds                                                 | Lifetime   | `SameSite` | `Path`              |
-| ------------ | ----------------------------------------------------- | ---------- | ---------- | ------------------- |
-| `wf_access`  | JWT (HS256, `sub` = admin id), signed by `JWT_SECRET` | 15 minutes | `Lax`      | `/api`              |
-| `wf_refresh` | 32 random bytes; only the SHA-256 is stored           | 14 days    | `Strict`   | `/api/auth/refresh` |
+| Cookie       | Holds                                                 | Lifetime   | `SameSite` | `Path`      |
+| ------------ | ----------------------------------------------------- | ---------- | ---------- | ----------- |
+| `wf_access`  | JWT (HS256, `sub` = admin id), signed by `JWT_SECRET` | 15 minutes | `Lax`      | `/api`      |
+| `wf_refresh` | 32 random bytes; only the SHA-256 is stored           | 14 days    | `Strict`   | `/api/auth` |
+
+`wf_refresh` is scoped to `/api/auth` rather than `/api/auth/refresh` because logout needs it too,
+to revoke its family.
 
 A refresh rotates: the presented token is revoked and a new one is issued in the same
 `family_id`. Presenting a token that was already revoked means it was copied, so the whole family
@@ -128,8 +142,10 @@ which a cross-site HTML form cannot send without a preflight that will fail.
 | `POST /api/auth/logout`  | none                  | 204, clears both cookies  | none                                        |
 | `GET /api/auth/me`       | none                  | 200 `AdminProfile`        | 401 `Unauthorized`                          |
 
-**Guarding.** A Passport JWT strategy reads `wf_access`. `AdminGuard` applies at controller level
-to everything under `/api/admin/*`, and `@CurrentUser()` injects the profile. Public controllers
+**Guarding.** `AdminGuard` verifies `wf_access` itself through `AccessTokens`; with one cookie and
+one pinned algorithm, a Passport strategy would add a dependency and nothing else. It applies at
+controller level to everything under `/api/admin/*`, and `@CurrentUser()` injects the signed-in
+admin's id. Public controllers
 never use the guard, and admin controllers never skip it.
 
 **Rate limits.** `@nestjs/throttler`: login 5 per minute per client IP, refresh 30 per minute, and
@@ -140,8 +156,8 @@ IP; see [Pitfalls](#pitfalls).
 layer-3 encrypted column, and a correct password without a valid code answers 401
 `TotpRequired`.
 
-**Time.** Expiry, rotation and rate windows read an injected `Clock`. Tests use `FixedClock`; no
-decision calls `new Date()`.
+**Time.** Token expiry, rotation, revocation and sign-in times read an injected `Clock`. Tests use
+`FixedClock`; no decision calls `new Date()`. Rate windows are the throttler's own.
 
 **Coverage.** `src/app/auth/**` at 90/90/85/90, already configured in
 [`vitest.config.ts`](../apps/server/vitest.config.ts).

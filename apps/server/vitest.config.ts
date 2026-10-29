@@ -1,11 +1,16 @@
 import { defineConfig } from 'vite';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import swc from 'unplugin-swc';
 
 // Not vite.config.ts: the @nx/vite plugin would infer a second build target.
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/server',
-  plugins: [nxViteTsPaths()],
+  // esbuild drops decorator metadata, which Nest's constructor injection reads.
+  plugins: [
+    nxViteTsPaths(),
+    swc.vite({ tsconfigFile: 'tsconfig.spec.json', module: { type: 'es6' } }),
+  ],
   test: {
     name: 'server',
     watch: false,

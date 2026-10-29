@@ -194,9 +194,12 @@ describe('HostStack', () => {
     });
   });
 
-  it('lets the host read only the database password, and never delete a backup', () => {
+  it('lets the host read only its own secrets, and never delete a backup', () => {
     const policies = JSON.stringify(host.findResources('AWS::IAM::Policy'));
-    expect(policies).toContain(`parameter${CONFIG.databasePasswordParameter}`);
+    for (const parameterName of CONFIG.secretParameters) {
+      expect(policies).toContain(`parameter${parameterName}`);
+    }
+    expect(policies).not.toMatch(/parameter\/wayfinder\/production\/\*/);
     expect(policies).not.toMatch(/ssm:GetParameters?ByPath|ssm:\*/);
     expect(policies).not.toMatch(/s3:Delete|s3:\*/);
   });

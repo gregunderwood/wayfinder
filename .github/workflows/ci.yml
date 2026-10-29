@@ -30,6 +30,8 @@ jobs:
           API_IMAGE: unused
           SITE_DOMAIN: unused
           DATABASE_PASSWORD: ci-only
+          JWT_SECRET: unused
+          DATA_ENCRYPTION_KEY: unused
           COMPOSE_FILE: docker-compose.yml:docker-compose.local.yml
 
       - run: npx nx format:check
@@ -50,6 +52,8 @@ jobs:
       # localhost: Caddy uses its internal CA, not Let's Encrypt.
       SITE_DOMAIN: localhost
       DATABASE_PASSWORD: ci-only
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
+      DATA_ENCRYPTION_KEY: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
     steps:
       - uses: actions/checkout@v7
 
@@ -85,6 +89,19 @@ jobs:
             echo "$headers" | grep -qi '^strict-transport-security:' || { echo "missing HSTS on $url"; exit 1; }
             if echo "$headers" | grep -qi '^x-powered-by:'; then echo "x-powered-by leaked on $url"; exit 1; fi
           done
+
+      - name: Migrate, create the admin and sign in, from the built image
+        run: |
+          docker compose exec -T api node main.js migrate:run
+          echo 'ci-only-admin-password' | docker compose exec -T api node main.js create-admin --email admin@example.com
+          jar=$(mktemp)
+          sign_in() {
+            curl -sk -o /dev/null -w '%{http_code}' -c "$jar" -H 'Content-Type: application/json' \
+              -d "{\"email\":\"admin@example.com\",\"password\":\"$1\"}" https://localhost/api/auth/login
+          }
+          [ "$(sign_in not-the-password)" = 401 ] || { echo 'a wrong password was accepted'; exit 1; }
+          [ "$(sign_in ci-only-admin-password)" = 204 ] || { echo 'sign-in failed'; exit 1; }
+          curl -sk -b "$jar" https://localhost/api/auth/me | jq -e '.email == "admin@example.com"' >/dev/null || { echo 'no session after sign-in'; exit 1; }
 
       - name: Logs on failure
         if: failure()

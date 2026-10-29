@@ -6,6 +6,7 @@ import {
   SUCCESS_EXIT_CODE,
   USAGE_ERROR_EXIT_CODE,
 } from './migrate';
+import * as migrations from './migrations';
 import { useTestDatabase } from './testing/test-database';
 
 describe('migration commands', () => {
@@ -48,4 +49,27 @@ describe('migration commands', () => {
       );
     },
   );
+
+  it('reverts every migration and applies them all again', async () => {
+    const tableNames = async (): Promise<string[]> =>
+      (
+        await database.dataSource.query<{ tablename: string }[]>(
+          "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'migrations' ORDER BY tablename",
+        )
+      ).map(({ tablename }) => tablename);
+    const tablesWhenMigrated = await tableNames();
+
+    const migrationCount = Object.values(migrations).length;
+    for (let reverted = 0; reverted < migrationCount; reverted++) {
+      expect(await runMigrationCommand('migrate:revert', testDatabaseEnv)).toBe(
+        SUCCESS_EXIT_CODE,
+      );
+    }
+    expect(await tableNames()).toEqual([]);
+
+    expect(await runMigrationCommand('migrate:run', testDatabaseEnv)).toBe(
+      SUCCESS_EXIT_CODE,
+    );
+    expect(await tableNames()).toEqual(tablesWhenMigrated);
+  });
 });
