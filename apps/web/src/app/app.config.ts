@@ -1,4 +1,9 @@
 import {
+  provideHttpClient,
+  withFetch,
+  withInterceptors,
+} from '@angular/common/http';
+import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
@@ -13,12 +18,14 @@ import {
   withEventReplay,
 } from '@angular/platform-browser';
 import { appRoutes } from './app.routes';
+import { apiErrorInterceptor } from './core/api-error.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideClientHydration(withEventReplay()),
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
+    provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])),
     provideRouter(
       appRoutes,
       withComponentInputBinding(),

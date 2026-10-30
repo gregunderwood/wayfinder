@@ -68,6 +68,7 @@ describe('projects API', () => {
 
   it.each<[HttpMethod, string]>([
     ['GET', '/admin/projects'],
+    ['GET', `/admin/projects/${SOME_ID}`],
     ['POST', '/admin/projects'],
     ['PATCH', `/admin/projects/${SOME_ID}`],
     ['DELETE', `/admin/projects/${SOME_ID}`],
@@ -114,6 +115,19 @@ describe('projects API', () => {
     expect(adminList.body).toEqual([
       expect.objectContaining({ status: ProjectStatus.Draft }),
     ]);
+  });
+
+  it('shows the admin one project by its id', async () => {
+    const { id } = await createProject({ status: ProjectStatus.Draft });
+
+    const response = await send('GET', `/admin/projects/${id}`, {
+      cookies: adminCookies,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({ id, slug: 'tempestas' }),
+    );
   });
 
   it.each([
