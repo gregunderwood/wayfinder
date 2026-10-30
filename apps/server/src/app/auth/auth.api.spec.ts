@@ -1,17 +1,9 @@
-import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ApiErrorCode } from '@wayfinder/domain';
-import { inject } from 'vitest';
+import { cookieValues, useTestApp } from '../../testing/test-app';
 import { useTestDatabase } from '../../testing/test-database';
-import {
-  TEST_DATA_ENCRYPTION_KEY,
-  TEST_JWT_SECRET,
-} from '../../testing/test-secrets';
-import { AppModule } from '../app.module';
+import { TEST_DATA_ENCRYPTION_KEY } from '../../testing/test-secrets';
 import { SystemClock } from '../common/clock';
 import { DataCipher } from '../common/data-cipher';
-import { configureApp } from '../configure-app';
 import { AdminAccountsService } from './admin-accounts.service';
 import { AdminUserEntity } from './models';
 import { ACCESS_COOKIE, REFRESH_COOKIE } from './session-cookies';
@@ -20,40 +12,9 @@ const EMAIL = 'owner@example.com';
 const PASSWORD = 'correct horse battery staple';
 const LOGINS_ALLOWED_PER_MINUTE = 5;
 
-interface ApiRequest {
-  body?: unknown;
-  cookies?: Record<string, string>;
-  contentType?: string;
-  clientIp?: string;
-}
-
-interface ApiResponse {
-  status: number;
-  body: unknown;
-  setCookies: string[];
-}
-
 describe('auth API', () => {
   const database = useTestDatabase();
-  let app: NestExpressApplication;
-  let baseUrl: string;
-  let nextClientIp = 1;
-
-  beforeAll(async () => {
-    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    stubTestEnvironment(String(database.dataSource.options.database));
-    app = await NestFactory.create<NestExpressApplication>(AppModule, {
-      logger: false,
-    });
-    configureApp(app);
-    await app.listen(0, '127.0.0.1');
-    baseUrl = `${await app.getUrl()}/api`;
-  });
-
-  afterAll(async () => {
-    await app.close();
-    vi.unstubAllEnvs();
-  });
+  const { send, newClientIp } = useTestApp(database);
 
   beforeEach(async () => {
     await new AdminAccountsService(
@@ -62,69 +23,6 @@ describe('auth API', () => {
       new SystemClock(),
     ).createAdmin(EMAIL, PASSWORD);
   });
-
-  function stubTestEnvironment(databaseName: string): void {
-    const server = inject('testDatabaseServer');
-    vi.stubEnv('DATABASE_HOST', server.host);
-    vi.stubEnv('DATABASE_PORT', String(server.port));
-    vi.stubEnv('DATABASE_USER', server.username);
-    vi.stubEnv('DATABASE_PASSWORD', server.password);
-    vi.stubEnv('DATABASE_NAME', databaseName);
-    vi.stubEnv('JWT_SECRET', TEST_JWT_SECRET);
-    vi.stubEnv('DATA_ENCRYPTION_KEY', TEST_DATA_ENCRYPTION_KEY.toString('hex'));
-  }
-
-  // Each test is its own client, so one test's rate limit cannot spill into the next.
-  function newClientIp(): string {
-    return `203.0.113.${nextClientIp++}`;
-  }
-
-  async function send(
-    method: 'GET' | 'POST',
-    path: string,
-    {
-      body,
-      cookies = {},
-      contentType = 'application/json',
-      clientIp = newClientIp(),
-    }: ApiRequest = {},
-  ): Promise<ApiResponse> {
-    const response = await fetch(`${baseUrl}${path}`, {
-      method,
-      headers: {
-        'content-type': contentType,
-        'x-forwarded-for': clientIp,
-        cookie: Object.entries(cookies)
-          .map(([name, value]) => `${name}=${value}`)
-          .join('; '),
-      },
-      body:
-        body === undefined
-          ? undefined
-          : typeof body === 'string'
-            ? body
-            : JSON.stringify(body),
-    });
-    const text = await response.text();
-    return {
-      status: response.status,
-      body: text ? JSON.parse(text) : null,
-      setCookies: response.headers.getSetCookie(),
-    };
-  }
-
-  function cookieValues(setCookies: string[]): Record<string, string> {
-    return Object.fromEntries(
-      setCookies.map((setCookie) => {
-        const [nameAndValue] = setCookie.split(';');
-        const separator = nameAndValue.indexOf('=');
-        return [
-          nameAndValue.slice(0, separator),
-          nameAndValue.slice(separator + 1),
-        ];
-      }),
-    );
-  }
 
   function setCookieFor(setCookies: string[], name: string): string {
     return (

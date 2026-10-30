@@ -50,6 +50,32 @@ describe('migration commands', () => {
     },
   );
 
+  it('seeds today’s projects as published, and takes only them back out', async () => {
+    const SEEDED_SLUGS = ['gateway', 'lvcc', 'tempestas', 'wayfinder'];
+    const projects = (): Promise<{ slug: string; status: string }[]> =>
+      database.dataSource.query(
+        'SELECT slug, status FROM projects ORDER BY sort_order, slug',
+      );
+    const runCommand = (command: string): Promise<number> =>
+      runMigrationCommand(command, testDatabaseEnv);
+    // Every test starts on emptied tables, so the seed is taken out and put back first.
+    expect(await runCommand('migrate:revert')).toBe(SUCCESS_EXIT_CODE);
+    expect(await runCommand('migrate:run')).toBe(SUCCESS_EXIT_CODE);
+
+    expect(await projects()).toEqual(
+      SEEDED_SLUGS.map((slug) => ({ slug, status: 'published' })),
+    );
+
+    await database.dataSource.query(
+      "INSERT INTO projects (slug, name, tagline, kind, role, period, body_markdown, sort_order) VALUES ('written-later', 'Later', 'Later.', 'personal', 'Sole developer', '2027', 'Later.', 9)",
+    );
+    expect(await runCommand('migrate:revert')).toBe(SUCCESS_EXIT_CODE);
+    expect(await projects()).toEqual([
+      { slug: 'written-later', status: 'draft' },
+    ]);
+    expect(await runCommand('migrate:run')).toBe(SUCCESS_EXIT_CODE);
+  });
+
   it('reverts every migration and applies them all again', async () => {
     const tableNames = async (): Promise<string[]> =>
       (

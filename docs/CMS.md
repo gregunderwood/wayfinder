@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1 and 3.2 built.** Sections 3.3–3.5 are the agreed design, not yet code. Anything listed
+Status: **3.1–3.3 built.** Sections 3.4 and 3.5 are the agreed design, not yet code. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -30,11 +30,11 @@ Built:
 - [../apps/server/src/app/auth/](../apps/server/src/app/auth/) — module, controller, `auth.service.ts` (sessions), `admin-accounts.service.ts` (the account), `access-tokens.ts`, `admin.guard.ts`, `current-user.decorator.ts`, `session-cookies.ts`, `models.ts`, `dto/`
 - [../apps/server/src/create-admin.ts](../apps/server/src/create-admin.ts) — the `create-admin` command
 - [../libs/domain/src/lib/auth/auth.model.ts](../libs/domain/src/lib/auth/auth.model.ts) — `LoginPayload`, `AdminProfile`
+- [../apps/server/src/app/projects/](../apps/server/src/app/projects/) — module, `projects.controller.ts` (public), `admin-projects.controller.ts`, service, `models.ts`, `dto/` (the field rules both payloads share)
+- [../libs/domain/src/lib/projects/project.model.ts](../libs/domain/src/lib/projects/project.model.ts) — `Project`, `AdminProject`, the payloads, the slug and tagline limits
 
 Planned (the path is part of the design):
 
-- `apps/server/src/app/projects/` — module, public and admin controllers, service, `models.ts`, `dto/`
-- Additions to `libs/domain/src/lib/projects/project.model.ts`
 - `apps/web/src/app/core/api.service.ts`, `core/api-error.interceptor.ts`, `core/auth/`
 - `apps/web/src/app/features/admin/` — `login`, `projects` (list and editor)
 
@@ -170,13 +170,18 @@ nothing that a visitor should not see. New:
 - `ProjectStatus` enum: `draft`, `published`.
 - `AdminProject` — `Project` plus `id`, `status`, `publishedAt`, `createdAt`, `updatedAt` (ISO
   strings).
-- `CreateProjectPayload` (every editable field), `UpdateProjectPayload` (all optional).
+- `CreateProjectPayload` (every editable field, `status` included, so publishing is an edit like
+  any other), `UpdateProjectPayload` (all optional). In an update a missing field is left alone
+  and a link set to `null` is removed; any other field set to `null` is a 400.
+- `PROJECT_SLUG_PATTERN` and `PROJECT_TAGLINE_MAX_LENGTH`, so the admin form checks the same rules
+  the API does.
 
-**Table `projects`.** `id`, `slug` (unique, `ix_projects_slug`), `name`, `tagline`, `kind`, `role`,
+**Table `projects`.** `id`, `slug` (unique, `ux_projects_slug`), `name`, `tagline`, `kind`, `role`,
 `period`, `stack` (`text[]`), `body_markdown`, `live_url`, `repo_url`, `docs_url`, `featured`,
-`sort_order`, `status`, `published_at`, `created_at`, `updated_at`. Every field and limit in
-`project.model.ts` and `content.spec.ts` carries over; for example a tagline over 160 characters
-is a 400.
+`sort_order`, `status`, `published_at`, `created_at`, `updated_at`. `kind` and `status` are
+`text` with a `CHECK`, not Postgres enums, which cannot lose a value in a migration. Every field
+and limit in `project.model.ts` and `content.spec.ts` carries over; for example a tagline over 160
+characters is a 400. Links must be `http` or `https`, so a `javascript:` URL never reaches a page.
 
 **Endpoints.**
 
@@ -186,14 +191,17 @@ is a 400.
 | `GET /api/projects/:slug`        | Public | One published project; a draft or a missing slug is the same 404 |
 | `GET /api/admin/projects`        | Admin  | Every project, as `AdminProject`                                 |
 | `POST /api/admin/projects`       | Admin  | 201; 409 `SlugTaken`                                             |
-| `PATCH /api/admin/projects/:id`  | Admin  | 200; 409 `SlugTaken`                                             |
-| `DELETE /api/admin/projects/:id` | Admin  | 204                                                              |
+| `PATCH /api/admin/projects/:id`  | Admin  | 200; 409 `SlugTaken`; 404 for an unknown id                      |
+| `DELETE /api/admin/projects/:id` | Admin  | 204; 404 for an unknown id                                       |
+
+An `:id` that is not a UUID is a 400 before the database is asked. Both lists are in `sort_order`,
+then slug.
 
 **Rules.**
 
 - **A draft never leaves through a public endpoint.** The published filter lives in one
   repository query used by both public routes, not in each controller.
-- **A published slug is a URL.** Renaming it is rejected with a 400 while the project is
+- **A published slug is a URL.** Renaming it is rejected with a 400 `SlugLocked` while the project is
   published; unpublish first, knowing old links will 404. Redirects from old slugs are not
   planned; they get built if a rename is ever needed.
 - **The slug's uniqueness is the database's job.** The service checks first so the common case
@@ -201,14 +209,20 @@ is a 400.
   to the same 409.
 - `published_at` is set the first time a project is published and kept on later edits.
 
-**Seed.** Today's projects arrive through a data migration, so every environment gets the same
-rows through the same reviewed path. The server cannot import `apps/web/.../content/projects.ts`
-(apps never import each other), so a one-off script generates the migration's SQL from that file
-and the generated migration is what is committed and reviewed.
+**Seed.** Today's projects arrive through a data migration, `SeedProjects1793340727145`, separate
+from the one that creates the table, so every environment gets the same rows through the same
+reviewed path. The server cannot import `apps/web/.../content/projects.ts` (apps never import each
+other), so a one-off script generated the migration from that file, and was checked against it
+field by field; the generated migration is what is committed and reviewed, and the script is not
+kept. The rows are inserted as published, with parameters rather than quoted SQL. Reverting it
+deletes those four slugs and nothing else. From here on the database is the source of truth;
+`projects.ts` stays only until 3.5 moves the public pages to the API.
 
 **Tests.** Every rule above is tested against real Postgres (see
 [Testing](Testing.md#the-test-database)), so the unique index and the published filter are
-exercised as they run in production. `src/app/projects/**` joins the coverage `include` list.
+exercised as they run in production, including two writes racing for one slug. Routes, the guard
+and validation are tested through HTTP with `useTestApp()`. `src/app/projects/**` joins the
+coverage `include` list.
 
 ### 3.4 Admin UI
 

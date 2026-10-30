@@ -9,6 +9,7 @@ import { GLOBAL_RATE_LIMIT } from './auth/session';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { JsonOnlyWritesGuard } from './common/json-only-writes.guard';
 import { HealthModule } from './health/health.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { HealthModule } from './health/health.module';
     ThrottlerModule.forRoot({ throttlers: [GLOBAL_RATE_LIMIT] }),
     HealthModule,
     AuthModule,
+    ProjectsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ApiExceptionFilter },

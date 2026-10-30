@@ -90,7 +90,7 @@ jobs:
             if echo "$headers" | grep -qi '^x-powered-by:'; then echo "x-powered-by leaked on $url"; exit 1; fi
           done
 
-      - name: Migrate, create the admin and sign in, from the built image
+      - name: Migrate, sign in and read the seeded projects, from the built image
         run: |
           docker compose exec -T api node main.js migrate:run
           echo 'ci-only-admin-password' | docker compose exec -T api node main.js create-admin --email admin@example.com
@@ -102,6 +102,9 @@ jobs:
           [ "$(sign_in not-the-password)" = 401 ] || { echo 'a wrong password was accepted'; exit 1; }
           [ "$(sign_in ci-only-admin-password)" = 204 ] || { echo 'sign-in failed'; exit 1; }
           curl -sk -b "$jar" https://localhost/api/auth/me | jq -e '.email == "admin@example.com"' >/dev/null || { echo 'no session after sign-in'; exit 1; }
+          seeded='["gateway","lvcc","tempestas","wayfinder"]'
+          curl -sk https://localhost/api/projects | jq -e "map(.slug) == $seeded" >/dev/null || { echo 'the seeded projects are not public'; exit 1; }
+          curl -sk -b "$jar" https://localhost/api/admin/projects | jq -e 'length == 4 and all(.status == "published")' >/dev/null || { echo 'the admin cannot list projects'; exit 1; }
 
       - name: Logs on failure
         if: failure()

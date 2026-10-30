@@ -43,11 +43,15 @@ export function useTestDatabase(): TestDatabase {
     ).initialize();
   });
 
+  // Before, not after: the template holds seeded rows that the first test must not see.
+  beforeEach(async () => {
+    await truncateAllTables(requireDataSource());
+  });
+
   afterEach(async () => {
     if (isOffline) {
       await bringBackOnline();
     }
-    await truncateAllTables(requireDataSource());
   });
 
   afterAll(async () => {
