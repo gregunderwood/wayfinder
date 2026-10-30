@@ -47,6 +47,8 @@ services:
       DATABASE_USER: wayfinder
       DATABASE_NAME: wayfinder
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?set DATA_ENCRYPTION_KEY}
     read_only: true
     tmpfs:
       - /tmp

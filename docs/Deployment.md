@@ -126,6 +126,20 @@ aws sns subscribe --profile wayfinder --region us-east-1 --protocol email \
   Changing it means also running `ALTER USER wayfinder PASSWORD '…'` in Postgres; the volume
   keeps the old one.
 
+- **The API's secrets** are two more SecureStrings beside it, created the same way before the
+  first deploy that needs them:
+
+  ```bash
+  for name in jwt-secret data-encryption-key; do
+    aws ssm put-parameter --profile wayfinder --region ca-central-1 --type SecureString \
+      --name /wayfinder/production/$name --value "$(openssl rand -hex 32)"
+  done
+  ```
+
+  Changing `jwt-secret` signs every session out. **Never change `data-encryption-key`**: the
+  encrypted columns can only be read with the key that wrote them, and backups hold the same
+  ciphertext, so a lost key is lost data.
+
 - **Backups** run nightly at 10:30 UTC: `pg_dump` to the data volume, checked with
   `pg_restore --list`, then uploaded to `s3://wayfinder-backups-742188596859/postgres/<timestamp>.dump`.
   The bucket is private, SSL-only, versioned, and expires backups after 30 days. The host can

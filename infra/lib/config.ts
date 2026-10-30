@@ -19,7 +19,11 @@ export const CONFIG = {
   appDirectory: '/opt/wayfinder',
   dataDirectory: '/var/lib/wayfinder',
   dataVolumeGib: 10,
-  databasePasswordParameter: '/wayfinder/production/database-password',
+  secretParameters: [
+    '/wayfinder/production/database-password',
+    '/wayfinder/production/jwt-secret',
+    '/wayfinder/production/data-encryption-key',
+  ],
   backupBucketName: 'wayfinder-backups-742188596859',
   backupRetentionDays: 30,
   // Amazon Linux does not package the Compose plugin, so the release binary is downloaded and verified.

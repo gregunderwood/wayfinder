@@ -147,11 +147,12 @@ export class HostStack extends Stack {
     this.allowAttachingTheDataVolume(role, props.dataVolume);
     role.addToPrincipalPolicy(
       new iam.PolicyStatement({
-        sid: 'ReadTheDatabasePassword',
+        sid: 'ReadTheAppSecrets',
         actions: ['ssm:GetParameter'],
-        resources: [
-          `arn:aws:ssm:${this.region}:${this.account}:parameter${CONFIG.databasePasswordParameter}`,
-        ],
+        resources: CONFIG.secretParameters.map(
+          (parameterName) =>
+            `arn:aws:ssm:${this.region}:${this.account}:parameter${parameterName}`,
+        ),
       }),
     );
   }

@@ -8,7 +8,7 @@ set -euo pipefail
 host_tag='tag:wayfinder:role'
 app_directory=/opt/wayfinder
 data_directory=/var/lib/wayfinder
-database_password_parameter=/wayfinder/production/database-password
+secret_parameters=/wayfinder/production
 
 read -r instance public_ip < <(aws ec2 describe-instances \
   --filters "Name=$host_tag,Values=web" Name=instance-state-name,Values=running \
@@ -26,9 +26,13 @@ set -euo pipefail
 mountpoint -q $data_directory || { echo "the data volume is not mounted at $data_directory"; exit 1; }
 cd $app_directory
 previous_tag=\$(sed -n 's/^IMAGE_TAG=//p' .env 2>/dev/null || true)
-database_password=\$(aws ssm get-parameter --region $AWS_REGION \
-  --name $database_password_parameter --with-decryption \
-  --query Parameter.Value --output text)
+read_secret() {
+  aws ssm get-parameter --region $AWS_REGION --name "$secret_parameters/\$1" \
+    --with-decryption --query Parameter.Value --output text
+}
+database_password=\$(read_secret database-password)
+jwt_secret=\$(read_secret jwt-secret)
+data_encryption_key=\$(read_secret data-encryption-key)
 
 write_env() {
   (umask 077 && cat > .env <<ENV
@@ -38,6 +42,8 @@ WEB_IMAGE=$REGISTRY/wayfinder/web:\$1
 API_IMAGE=$REGISTRY/wayfinder/api:\$1
 SITE_DOMAIN=$SITE_DOMAIN
 DATABASE_PASSWORD=\$database_password
+JWT_SECRET=\$jwt_secret
+DATA_ENCRYPTION_KEY=\$data_encryption_key
 ENV
   )
 }
