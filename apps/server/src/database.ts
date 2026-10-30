@@ -1,6 +1,7 @@
 import * as pg from 'pg';
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 import { AdminUserEntity, RefreshTokenEntity } from './app/auth/models';
+import { ProjectEntity } from './app/projects/models';
 import * as migrations from './migrations';
 
 export type EnvLookup = (name: string) => string | undefined;
@@ -26,6 +27,7 @@ const QUERY_TIMEOUT_MS = 5_000;
 export const ENTITIES: NonNullable<PostgresConnectionOptions['entities']> = [
   AdminUserEntity,
   RefreshTokenEntity,
+  ProjectEntity,
 ];
 
 export function readDatabaseConfig(env: EnvLookup): DatabaseConfig {

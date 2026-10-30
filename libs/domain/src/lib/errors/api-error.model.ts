@@ -11,6 +11,8 @@ export enum ApiErrorCode {
   /** The password was right; a two-factor code is still owed. */
   TotpRequired = 'TOTP_REQUIRED',
   SlugTaken = 'SLUG_TAKEN',
+  /** A published project's slug is a public URL; it changes only after unpublishing. */
+  SlugLocked = 'SLUG_LOCKED',
   RateLimited = 'RATE_LIMITED',
   UnsupportedMedia = 'UNSUPPORTED_MEDIA',
 }

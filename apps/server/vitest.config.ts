@@ -23,7 +23,7 @@ export default defineConfig({
     coverage: {
       reportsDirectory: '../../coverage/apps/server',
       provider: 'v8',
-      include: ['src/app/auth/**', 'src/app/posts/**'],
+      include: ['src/app/auth/**', 'src/app/projects/**', 'src/app/posts/**'],
       exclude: [
         '**/*.module.ts',
         '**/*.controller.ts',

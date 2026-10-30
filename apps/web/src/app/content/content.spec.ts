@@ -1,21 +1,23 @@
-import { SkillCategory } from '@wayfinder/domain';
+import {
+  PROJECT_SLUG_PATTERN,
+  PROJECT_TAGLINE_MAX_LENGTH,
+  SkillCategory,
+} from '@wayfinder/domain';
 import { EARLIER_ROLES, ROLES } from './experience';
 import { PROJECTS, findProject, projectsInOrder } from './projects';
 import { SKILLS, groupSkills } from './skills';
-
-const META_DESCRIPTION_MAX_LENGTH = 160;
 
 describe('content', () => {
   it('has unique project slugs that are safe URL segments', () => {
     const slugs = PROJECTS.map((project) => project.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
-    for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    for (const slug of slugs) expect(slug).toMatch(PROJECT_SLUG_PATTERN);
   });
 
   it('keeps taglines short enough to serve as meta descriptions', () => {
     for (const project of PROJECTS) {
       expect(project.tagline.length, project.slug).toBeLessThanOrEqual(
-        META_DESCRIPTION_MAX_LENGTH,
+        PROJECT_TAGLINE_MAX_LENGTH,
       );
     }
   });
