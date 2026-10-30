@@ -7,7 +7,7 @@ const BACKSPACE_KEYS = new Set(['\u007f', '\b']);
 // Never an argument or an environment variable: either would show up in shell history or `ps`.
 export async function readPasswordFromStdin(): Promise<string> {
   if (!process.stdin.isTTY) {
-    return readFirstLine();
+    return readFirstLine(process.stdin);
   }
   const password = await promptWithoutEcho('Password: ');
   const confirmation = await promptWithoutEcho('Repeat the password: ');
@@ -17,14 +17,15 @@ export async function readPasswordFromStdin(): Promise<string> {
   return password;
 }
 
-function readFirstLine(): Promise<string> {
+export function readFirstLine(input: NodeJS.ReadableStream): Promise<string> {
   return new Promise((resolve) => {
-    const lines = createInterface({ input: process.stdin });
+    const lines = createInterface({ input });
+    let firstLine = '';
     lines.once('line', (line) => {
+      firstLine = line;
       lines.close();
-      resolve(line);
     });
-    lines.once('close', () => resolve(''));
+    lines.once('close', () => resolve(firstLine));
   });
 }
 
