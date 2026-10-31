@@ -24,8 +24,8 @@ moderating testimonials. One Nx workspace, three projects plus an e2e suite.
 browser ──► Caddy (TLS) ──► web  (Angular SSR, Express)  ──► /api ──► server (NestJS) ──► Postgres
 ```
 
-- **`apps/web`** — Angular 20, standalone, SSR with prerender. The public routes are prerendered
-  at build time where their content is known and server-rendered otherwise; `/admin/*` is
+- **`apps/web`** — Angular 20, standalone, SSR with prerender. Pages that show projects are
+  server-rendered per request from the API; the rest are prerendered at build time. `/admin/*` is
   client-rendered, `noindex`, and never prerendered.
 - **`apps/server`** — NestJS 11 under `/api`. Public endpoints are read-only and return published
   rows only. Every write is admin-guarded, with two deliberate public exceptions: `POST /contact`

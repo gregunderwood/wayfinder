@@ -1,36 +1,8 @@
-import {
-  PROJECT_SLUG_PATTERN,
-  PROJECT_TAGLINE_MAX_LENGTH,
-  SkillCategory,
-} from '@wayfinder/domain';
+import { SkillCategory } from '@wayfinder/domain';
 import { EARLIER_ROLES, ROLES } from './experience';
-import { PROJECTS, findProject, projectsInOrder } from './projects';
 import { SKILLS, groupSkills } from './skills';
 
 describe('content', () => {
-  it('has unique project slugs that are safe URL segments', () => {
-    const slugs = PROJECTS.map((project) => project.slug);
-    expect(new Set(slugs).size).toBe(slugs.length);
-    for (const slug of slugs) expect(slug).toMatch(PROJECT_SLUG_PATTERN);
-  });
-
-  it('keeps taglines short enough to serve as meta descriptions', () => {
-    for (const project of PROJECTS) {
-      expect(project.tagline.length, project.slug).toBeLessThanOrEqual(
-        PROJECT_TAGLINE_MAX_LENGTH,
-      );
-    }
-  });
-
-  it('orders projects by sortOrder and finds them by slug', () => {
-    const sortOrders = projectsInOrder().map((project) => project.sortOrder);
-    expect(sortOrders).toEqual(
-      [...sortOrders].sort((first, second) => first - second),
-    );
-    expect(findProject('lvcc')?.name).toContain('Lardeau');
-    expect(findProject('missing')).toBeUndefined();
-  });
-
   it('puts featured skills first within each group and drops empty groups', () => {
     const groups = groupSkills(SKILLS);
     for (const group of groups) {

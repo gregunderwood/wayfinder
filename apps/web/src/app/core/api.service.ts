@@ -9,11 +9,14 @@ import type {
   AdminProject,
   CreateProjectPayload,
   LoginPayload,
+  Project,
+  ProjectSummary,
   UpdateProjectPayload,
 } from '@wayfinder/domain';
 import { firstValueFrom, type Observable } from 'rxjs';
 
-const API = '/api';
+export const API_PATH = '/api';
+const API = API_PATH;
 // The API refuses any write that is not JSON, and HttpClient only sets the type when there is a body.
 const EMPTY_JSON_BODY = {};
 
@@ -23,6 +26,16 @@ export const REDIRECT_TO_SIGN_IN = new HttpContextToken<boolean>(() => true);
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
+
+  listProjects(): Promise<ProjectSummary[]> {
+    return this.send(this.http.get<ProjectSummary[]>(`${API}/projects`));
+  }
+
+  project(slug: string): Promise<Project> {
+    return this.send(
+      this.http.get<Project>(`${API}/projects/${encodeURIComponent(slug)}`),
+    );
+  }
 
   signIn(credentials: LoginPayload): Promise<void> {
     return this.send(this.http.post<void>(`${API}/auth/login`, credentials));

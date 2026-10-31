@@ -34,7 +34,7 @@ secrets from SSM into a root-only `.env`, installs the backup timer, and waits f
 container's healthcheck, then runs `caddy reload`. A reload validates the new Caddyfile and
 keeps serving the old config if it is invalid, which fails the deploy without dropping the site.
 Caddy mounts the `caddy/` directory rather than the file, because a single-file bind mount stays
-pinned to the copy a deploy replaces. The workflow then checks `/`, `/sitemap.xml`, a 404, the
+pinned to the copy a deploy replaces. The workflow then checks `/`, `/work`, `/sitemap.xml`, a 404, the
 HTTP→HTTPS redirect, `X-Robots-Tag` on `/admin`, and `/api/health` (`databaseReachable: true`)
 from outside, over the real certificate.
 

@@ -116,6 +116,15 @@ describe('ProjectsService', () => {
       ]);
     });
 
+    it('lists projects without their bodies, which only their own pages need', async () => {
+      await projects.create(aProject());
+
+      const [listed] = await projects.listPublished();
+
+      expect(listed).not.toHaveProperty('bodyMarkdown');
+      expect(listed).toEqual(expect.objectContaining({ slug: 'tempestas' }));
+    });
+
     it('shows nothing a visitor should not see', async () => {
       await projects.create(aProject({ liveUrl: 'https://example.com' }));
 

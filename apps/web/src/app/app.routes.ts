@@ -1,20 +1,28 @@
 import { Route } from '@angular/router';
 import { adminGuard } from './core/auth/admin.guard';
+import {
+  featuredProjectsResolver,
+  projectListResolver,
+  projectPageResolver,
+} from './features/work/project-resolvers';
 
 export const appRoutes: Route[] = [
   {
     path: '',
     pathMatch: 'full',
+    resolve: { featuredProjects: featuredProjectsResolver },
     loadComponent: () =>
       import('./features/home/home').then((module) => module.Home),
   },
   {
     path: 'work',
+    resolve: { page: projectListResolver },
     loadComponent: () =>
       import('./features/work/work-list').then((module) => module.WorkList),
   },
   {
     path: 'work/:slug',
+    resolve: { page: projectPageResolver },
     loadComponent: () =>
       import('./features/work/work-detail').then((module) => module.WorkDetail),
   },

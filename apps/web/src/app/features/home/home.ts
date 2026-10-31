@@ -1,6 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  input,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { projectsInOrder } from '../../content/projects';
+import type { ProjectSummary } from '@wayfinder/domain';
 import { SKILLS } from '../../content/skills';
 import { SeoService } from '../../core/seo.service';
 import { AVAILABILITY, PERSON } from '../../core/site.config';
@@ -61,15 +66,17 @@ import { ProjectCard } from '../../shared/project-card';
       </div>
     </section>
 
-    <section class="section wrap" aria-labelledby="work">
-      <h2 id="work">Selected work</h2>
-      <div class="grid">
-        @for (project of featuredProjects; track project.slug) {
-          <wf-project-card [project]="project" />
-        }
-      </div>
-      <p class="more"><a routerLink="/work">All work →</a></p>
-    </section>
+    @if (featuredProjects().length > 0) {
+      <section class="section wrap" aria-labelledby="work">
+        <h2 id="work">Selected work</h2>
+        <div class="grid">
+          @for (project of featuredProjects(); track project.slug) {
+            <wf-project-card [project]="project" />
+          }
+        </div>
+        <p class="more"><a routerLink="/work">All work →</a></p>
+      </section>
+    }
 
     <section class="section wrap" aria-labelledby="stack">
       <h2 id="stack">What I use every day</h2>
@@ -116,9 +123,8 @@ import { ProjectCard } from '../../shared/project-card';
 export class Home {
   protected readonly person = PERSON;
   protected readonly availability = AVAILABILITY;
-  protected readonly featuredProjects = projectsInOrder().filter(
-    (project) => project.featured,
-  );
+  /** Bound from the route's resolver; empty when the API cannot be reached. */
+  readonly featuredProjects = input<ProjectSummary[]>([]);
   protected readonly dailySkills = SKILLS.filter((skill) => skill.featured);
 
   constructor() {

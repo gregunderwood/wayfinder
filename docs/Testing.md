@@ -23,7 +23,7 @@ Cypress covers route visibility end to end.
 npx nx run-many -t lint,test,build     # the gate
 npx nx test server --coverage          # where thresholds are checked
 npx nx test server -- posts            # one file, by substring
-npx nx e2e web-e2e                     # Cypress against a served build
+npx nx e2e web-e2e                     # Cypress against a served build; needs `npx nx serve server`
 ```
 
 Vitest globals are on: `describe`, `it`, `expect` and `vi` need no import.
@@ -86,6 +86,8 @@ replaced by a small hand-written class, never a deep `vi.fn()` chain.
 - **Cypress fails with `bad option: --no-sandbox` from a VS Code terminal.** VS Code sets
   `ELECTRON_RUN_AS_NODE=1`, which makes Cypress's Electron start as plain Node. Run it with
   `env -u ELECTRON_RUN_AS_NODE npx nx e2e web-e2e`.
+- **Cypress fails on `/work` with "This page is unavailable".** Project pages render from the API,
+  so the suite needs `npx nx serve server` running against a migrated database.
 
 ## When to update this file
 

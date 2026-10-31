@@ -1,6 +1,13 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { projectsInOrder } from '../../content/projects';
+import type { ProjectSummary } from '@wayfinder/domain';
+import type { PageData } from '../../core/page-data';
 import { SeoService } from '../../core/seo.service';
 import { ProjectCard } from '../../shared/project-card';
 
@@ -18,16 +25,28 @@ import { ProjectCard } from '../../shared/project-card';
       </p>
     </header>
     <section class="wrap section">
-      <div class="grid">
-        @for (project of projects; track project.slug) {
-          <wf-project-card [project]="project" />
-        }
-      </div>
+      @if (projects(); as projects) {
+        <div class="grid">
+          @for (project of projects; track project.slug) {
+            <wf-project-card [project]="project" />
+          }
+        </div>
+      } @else {
+        <p class="lead" role="status">
+          The projects could not be loaded just now. Try again in a minute.
+        </p>
+      }
     </section>
   `,
 })
 export class WorkList {
-  protected readonly projects = projectsInOrder();
+  /** Bound from the route's resolver. */
+  readonly page = input.required<PageData<ProjectSummary[]>>();
+
+  protected readonly projects = computed(() => {
+    const page = this.page();
+    return page.status === 'ready' ? page.content : null;
+  });
 
   constructor() {
     inject(SeoService).set({

@@ -111,6 +111,7 @@ expect_status() {
   [ "$code" = "$1" ]
 }
 expect_status 200 "https://$SITE_DOMAIN/"
+expect_status 200 "https://$SITE_DOMAIN/work"
 expect_status 200 "https://$SITE_DOMAIN/sitemap.xml"
 expect_status 404 "https://$SITE_DOMAIN/no-such-page"
 expect_status 308 "http://$SITE_DOMAIN/"
