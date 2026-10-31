@@ -54,6 +54,9 @@ jobs:
       DATABASE_PASSWORD: ci-only
       JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
       DATA_ENCRYPTION_KEY: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+      BACKUP_BUCKET: ci-backups
+      AWS_REGION: ca-central-1
+      BROKEN_API_IMAGE: wayfinder-api:broken
     steps:
       - uses: actions/checkout@v7
 
@@ -61,16 +64,28 @@ jobs:
         run: |
           docker build -f Dockerfile.web -t "$WEB_IMAGE" .
           docker build -f Dockerfile.server -t "$API_IMAGE" .
+          .github/scripts/build-broken-release.sh "$BROKEN_API_IMAGE"
+
+      - name: Stand in for S3, which a release backs up to
+        run: |
+          echo "$GITHUB_WORKSPACE/.github/scripts/fake-aws" >> "$GITHUB_PATH"
+          {
+            echo "FAKE_S3=$RUNNER_TEMP/s3"
+            echo "DATA_DIRECTORY=$RUNNER_TEMP"
+            echo "APP_DIRECTORY=$GITHUB_WORKSPACE"
+          } >> "$GITHUB_ENV"
 
       - name: Check the production compose override
         run: docker compose -f docker-compose.yml -f docker-compose.production.yml config --quiet
 
-      - name: Start the stack behind Caddy
-        run: docker compose up -d --wait --wait-timeout 120
-
-      - name: Migrate, sign in and read the seeded projects, from the built image
+      - name: Release onto an empty database, as a deploy does
         run: |
-          docker compose exec -T api node main.js migrate:run
+          deploy/host/release.sh ci-first
+          ls "$FAKE_S3/$BACKUP_BUCKET"/postgres/*-ci-first.dump || { echo 'no backup before migrating'; exit 1; }
+          docker compose run --rm -T api node main.js migrate:show | grep -q 'The schema is up to date' || { echo 'migrations still pending'; exit 1; }
+
+      - name: Sign in and read the seeded projects, from the built image
+        run: |
           echo 'ci-only-admin-password' | docker compose exec -T api node main.js create-admin --email admin@example.com
           jar=$(mktemp)
           sign_in() {
@@ -111,6 +126,14 @@ jobs:
           done
           curl -skI https://localhost/admin/login | grep -qi '^x-robots-tag: noindex' || { echo '/admin is missing X-Robots-Tag'; exit 1; }
           if curl -skI https://localhost/work | grep -qi '^x-robots-tag:'; then echo 'a public page is marked noindex'; exit 1; fi
+          for page in / /work /work/gateway /about /resume; do
+            html=$(curl -sk "https://localhost$page")
+            grep -q 'ng-server-context="ss[rg]"' <<<"$html" || { echo "$page was not rendered on the server"; exit 1; }
+            grep -q '<meta name="robots" content="index, follow">' <<<"$html" || { echo "$page is not indexable"; exit 1; }
+          done
+          for page in /admin/login /admin/projects; do
+            if curl -sk "https://localhost$page" | grep -q 'ng-server-context'; then echo "$page was rendered on the server"; exit 1; fi
+          done
           docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: With the API down, project pages answer 503 and the rest still serve
@@ -127,7 +150,47 @@ jobs:
           expect 200 https://localhost/
           expect 200 https://localhost/about
           curl -skI https://localhost/work/gateway | grep -qi '^retry-after:' || { echo 'a 503 without Retry-After'; exit 1; }
-          docker compose start api
+          docker compose up -d --wait api
+
+      - name: A release whose migration fails stops, and the current release keeps serving
+        run: |
+          api_container=$(docker compose ps -q api)
+          docker compose exec -T postgres psql -U wayfinder -d wayfinder -c 'CREATE TABLE ci_rollback_probe (id integer)'
+          if API_IMAGE=$BROKEN_API_IMAGE deploy/host/release.sh ci-failed-migration; then echo 'the release went ahead'; exit 1; fi
+          [ "$(docker compose ps -q api)" = "$api_container" ] || { echo 'the API was replaced'; exit 1; }
+          if docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc 'SELECT name FROM migrations' | grep -q CiRollbackProbe; then
+            echo 'the failed migration was recorded'; exit 1
+          fi
+          [ "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/work/gateway)" = 200 ] || { echo 'the site stopped serving'; exit 1; }
+          docker compose exec -T postgres psql -U wayfinder -d wayfinder -c 'DROP TABLE ci_rollback_probe'
+
+      - name: A release that migrates and never becomes healthy reverts its migration and images
+        run: |
+          if API_IMAGE=$BROKEN_API_IMAGE deploy/host/release.sh ci-unhealthy "$WEB_IMAGE" "$API_IMAGE" >"$RUNNER_TEMP/release.log" 2>&1; then
+            cat "$RUNNER_TEMP/release.log"; echo 'the release went ahead'; exit 1
+          fi
+          cat "$RUNNER_TEMP/release.log"
+          grep -q 'Rolled back: reverted migrations \[CiRollbackProbe9999999999999\]' "$RUNNER_TEMP/release.log" || { echo 'it did not say what it reverted'; exit 1; }
+          [ -z "$(docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc "SELECT to_regclass('ci_rollback_probe')")" ] || { echo 'the migration was not reverted'; exit 1; }
+          [ "$(docker inspect --format '{{.Config.Image}}' "$(docker compose ps -q api)")" = "$API_IMAGE" ] || { echo 'the previous API image was not restored'; exit 1; }
+          [ "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/work/gateway)" = 200 ] || { echo 'the site is not serving'; exit 1; }
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Public and admin end to end, against the stack
+        run: |
+          npm ci
+          npx cypress run --project apps/web-e2e --config-file cypress.stack.config.ts
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: dist/cypress/web-e2e/stack/screenshots
+          if-no-files-found: ignore
 
       - name: Logs on failure
         if: failure()

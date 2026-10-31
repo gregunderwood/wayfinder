@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1–3.5 built.** 3.6 is designed in its GitHub issue. Anything listed
+Status: **Phase 3 built.** Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -53,7 +53,8 @@ explicit `name:`, `timestamptz` only, and named indexes (`ix_projects_slug`). Ea
 added to `ENTITIES` and each migration to `migrations/index.ts` by hand.
 
 Commands run in the image as `node main.js <command>`: `migrate:show|run|revert` and
-`create-admin`. None runs on deploy by itself.
+`create-admin`. Each deploy runs `migrate:run` itself ([Deployment](Deployment.md#deploying-the-site));
+`create-admin` is only ever run by hand.
 
 ### Sensitive data
 
@@ -411,9 +412,9 @@ A copy of the `refresh_tokens` table, or a backup of it, must not be enough to s
 - **A `RenderMode.Client` route listed after `**` never matches.** Admin entries go before the
   catch-all in `app.routes.server.ts`.
 - **SSR with a relative `/api` URL fails in Node,** which has no origin to resolve against. That is
-  what the server-side interceptor is for.
+  what `InternalApiBackend` is for.
 - **An entity or migration missing from its hand-written list** works from source and is absent
-  from the image. The CI migration job runs `migrate:*` from the built image, not from source, to catch it.
+  from the image. CI migrates with `release.sh` from the built image, not from source, to catch it.
 
 ## Open questions
 

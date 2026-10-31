@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Stands in for S3: `aws s3 cp <file> s3://<bucket>/<key> ...` copies into $FAKE_S3.
+set -euo pipefail
+[ "$1 $2" = 's3 cp' ] || { echo "fake aws: unsupported: $*" >&2; exit 1; }
+destination="$FAKE_S3/${4#s3://}"
+mkdir -p "$(dirname "$destination")" && cp "$3" "$destination"

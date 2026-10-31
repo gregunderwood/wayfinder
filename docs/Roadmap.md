@@ -7,16 +7,16 @@ database-free, Phase 2 deploys it, and the CMS arrives underneath a site that is
 
 ## Status
 
-| Phase | Outcome                                                                                                            | State                      |
-| ----- | ------------------------------------------------------------------------------------------------------------------ | -------------------------- |
-| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done**                   |
-| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done**                   |
-| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done**                   |
-| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | **In progress** (3.6 left) |
-| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |                            |
-| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |                            |
-| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |                            |
-| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |                            |
+| Phase | Outcome                                                                                                            | State    |
+| ----- | ------------------------------------------------------------------------------------------------------------------ | -------- |
+| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done** |
+| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done** |
+| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done** |
+| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | **Done** |
+| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |          |
+| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |          |
+| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |          |
+| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |          |
 
 Deployment moved up from last to Phase 2: a repo that is public and on a résumé should point at a
 live site, and a static, database-free site is the simplest thing this project will ever deploy.
@@ -111,8 +111,10 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
   prerendered.
 - **Secrets never enter the repo or GitHub.** The database password and JWT signing keys are
   SSM SecureString parameters; the deploy script has the host read them into `.env`.
-- **Migrations run on deploy, with rollback (from 3.6).** Until then they are run by hand on the
-  host (`migrate:show`, then `migrate:run`). Either way, every migration must pass
+- **Migrations run on deploy, with rollback.** The deploy backs up, migrates with the new image
+  before switching, and reverts what it applied if the release never becomes healthy. Every
+  migration expands before it contracts, so the previous images can run on the new schema, and
+  must pass
   `run → revert → run` in the server tests.
 
 ### Steps
@@ -124,7 +126,7 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
 | 3.3 ✅ | **Projects, API and admin:** public read-only endpoints (published only), admin CRUD, a seed from `projects.ts`; `/admin` sign-in and a Projects editor with markdown preview, client-only and `noindex`                                  |
 | 3.4 ✅ | **Admin shortcuts on the public site** ([#5](https://github.com/gregunderwood/wayfinder/issues/5)): a signed-in bar, "Edit this project" on project pages, a footer sign-in link when signed out                                          |
 | 3.5 ✅ | **Public pages from the API** ([#6](https://github.com/gregunderwood/wayfinder/issues/6)): project pages server-rendered per request; sitemap built from the database                                                                     |
-| 3.6    | **Cutover and button-up** ([#7](https://github.com/gregunderwood/wayfinder/issues/7)): migrations run automatically on deploy with rollback; an admin Cypress suite in CI; `docs/Deployment.md` reviewed; the "Done when" checked live    |
+| 3.6 ✅ | **Cutover and button-up** ([#7](https://github.com/gregunderwood/wayfinder/issues/7)): migrations run automatically on deploy with rollback; an admin Cypress suite in CI; `docs/Deployment.md` reviewed; the "Done when" checked live    |
 
 **Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
 a deploy; and a deleted database can be restored from last night's backup.
@@ -152,8 +154,14 @@ a deploy; and a deleted database can be restored from last night's backup.
 - **No `Cache-Control` on server-rendered pages.** With no shared cache in front of the site, it
   would only show the admin stale pages after an edit.
 - **The web healthcheck fetches `/about`**, a prerendered page, so an API outage does not fail it.
-- **Migrations will run on deploy.** They were planned as a permanent hand step; 3.6 automates
-  them now that each step deploys on merge.
+- **Migrations run on deploy.** They were planned as a permanent hand step; 3.6 automated them
+  once each step deployed on merge. Every deploy takes a backup first, not only one that
+  migrates, because a restore point costs a few kilobytes.
+- **CI proves the rollback paths** by releasing a deliberately broken API image onto the compose
+  stack: once with a migration that fails, and once with one that applies before the release
+  fails its healthcheck.
+- **The admin Cypress suite runs against the production images** behind Caddy in CI, with the
+  public specs, rather than against the dev server.
 
 ### Deliberately not in Phase 3
 

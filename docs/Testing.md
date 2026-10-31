@@ -24,7 +24,12 @@ npx nx run-many -t lint,test,build     # the gate
 npx nx test server --coverage          # where thresholds are checked
 npx nx test server -- posts            # one file, by substring
 npx nx e2e web-e2e                     # Cypress against a served build; needs `npx nx serve server`
+npx cypress run --project apps/web-e2e --config-file cypress.stack.config.ts   # public and admin, against `docker compose up`
 ```
+
+The stack suite needs an admin: `docker compose exec api node main.js create-admin --email
+admin@example.com`, with the password in `cypress.stack.config.ts`. CI runs it on every PR, after
+releasing onto an empty database and exercising both rollback paths.
 
 Vitest globals are on: `describe`, `it`, `expect` and `vi` need no import.
 

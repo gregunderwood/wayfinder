@@ -13,5 +13,7 @@ export default defineConfig({
       ciBaseUrl: 'http://localhost:4200',
     }),
     baseUrl: 'http://localhost:4200',
+    // The admin specs need an admin account; they run against the compose stack.
+    specPattern: 'src/e2e/**/*.cy.ts',
   },
 });
