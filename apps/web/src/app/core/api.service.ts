@@ -16,7 +16,6 @@ import type {
 import { firstValueFrom, type Observable } from 'rxjs';
 
 export const API_PATH = '/api';
-const API = API_PATH;
 // The API refuses any write that is not JSON, and HttpClient only sets the type when there is a body.
 const EMPTY_JSON_BODY = {};
 
@@ -28,46 +27,52 @@ export class ApiService {
   private readonly http = inject(HttpClient);
 
   listProjects(): Promise<ProjectSummary[]> {
-    return this.send(this.http.get<ProjectSummary[]>(`${API}/projects`));
+    return this.send(this.http.get<ProjectSummary[]>(`${API_PATH}/projects`));
   }
 
   project(slug: string): Promise<Project> {
     return this.send(
-      this.http.get<Project>(`${API}/projects/${encodeURIComponent(slug)}`),
+      this.http.get<Project>(
+        `${API_PATH}/projects/${encodeURIComponent(slug)}`,
+      ),
     );
   }
 
   signIn(credentials: LoginPayload): Promise<void> {
-    return this.send(this.http.post<void>(`${API}/auth/login`, credentials));
+    return this.send(
+      this.http.post<void>(`${API_PATH}/auth/login`, credentials),
+    );
   }
 
   refreshSession(): Promise<void> {
     return this.send(
-      this.http.post<void>(`${API}/auth/refresh`, EMPTY_JSON_BODY),
+      this.http.post<void>(`${API_PATH}/auth/refresh`, EMPTY_JSON_BODY),
     );
   }
 
   signOut(): Promise<void> {
     return this.send(
-      this.http.post<void>(`${API}/auth/logout`, EMPTY_JSON_BODY),
+      this.http.post<void>(`${API_PATH}/auth/logout`, EMPTY_JSON_BODY),
     );
   }
 
   currentAdmin(): Promise<AdminProfile> {
     return this.send(
-      this.http.get<AdminProfile>(`${API}/auth/me`, {
+      this.http.get<AdminProfile>(`${API_PATH}/auth/me`, {
         context: new HttpContext().set(REDIRECT_TO_SIGN_IN, false),
       }),
     );
   }
 
   listAdminProjects(): Promise<AdminProject[]> {
-    return this.send(this.http.get<AdminProject[]>(`${API}/admin/projects`));
+    return this.send(
+      this.http.get<AdminProject[]>(`${API_PATH}/admin/projects`),
+    );
   }
 
   adminProject(id: string): Promise<AdminProject> {
     return this.send(
-      this.http.get<AdminProject>(`${API}/admin/projects/${id}`),
+      this.http.get<AdminProject>(`${API_PATH}/admin/projects/${id}`),
     );
   }
 
@@ -75,7 +80,7 @@ export class ApiService {
   adminProjectBySlug(slug: string): Promise<AdminProject> {
     return this.send(
       this.http.get<AdminProject>(
-        `${API}/admin/projects/by-slug/${encodeURIComponent(slug)}`,
+        `${API_PATH}/admin/projects/by-slug/${encodeURIComponent(slug)}`,
         { context: new HttpContext().set(REDIRECT_TO_SIGN_IN, false) },
       ),
     );
@@ -83,7 +88,7 @@ export class ApiService {
 
   createProject(payload: CreateProjectPayload): Promise<AdminProject> {
     return this.send(
-      this.http.post<AdminProject>(`${API}/admin/projects`, payload),
+      this.http.post<AdminProject>(`${API_PATH}/admin/projects`, payload),
     );
   }
 
@@ -92,13 +97,16 @@ export class ApiService {
     payload: UpdateProjectPayload,
   ): Promise<AdminProject> {
     return this.send(
-      this.http.patch<AdminProject>(`${API}/admin/projects/${id}`, payload),
+      this.http.patch<AdminProject>(
+        `${API_PATH}/admin/projects/${id}`,
+        payload,
+      ),
     );
   }
 
   deleteProject(id: string): Promise<void> {
     return this.send(
-      this.http.delete<void>(`${API}/admin/projects/${id}`, {
+      this.http.delete<void>(`${API_PATH}/admin/projects/${id}`, {
         body: EMPTY_JSON_BODY,
       }),
     );

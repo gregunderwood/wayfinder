@@ -7,30 +7,32 @@ import {
 import { REQUEST, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { type Observable, of } from 'rxjs';
-import { INTERNAL_API_URL, InternalApiBackend } from './internal-api.backend';
+import {
+  INTERNAL_API_TIMEOUT_MS,
+  INTERNAL_API_URL,
+  InternalApiBackend,
+} from './internal-api.backend';
 
 const INTERNAL = 'http://api:3000/api';
 
-class RecordingFetch {
-  readonly sent: HttpRequest<unknown>[] = [];
-
-  handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
-    this.sent.push(request);
-    return of(new HttpResponse({ status: 200 }));
-  }
-}
-
 describe('InternalApiBackend', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   function send(
     url: string,
     visitorRequest: Request | null = null,
   ): HttpRequest<unknown> {
-    const fetch = new RecordingFetch();
+    const sent: HttpRequest<unknown>[] = [];
+    vi.spyOn(FetchBackend.prototype, 'handle').mockImplementation(
+      (request): Observable<HttpEvent<unknown>> => {
+        sent.push(request);
+        return of(new HttpResponse({ status: 200 }));
+      },
+    );
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         InternalApiBackend,
-        { provide: FetchBackend, useValue: fetch },
         { provide: INTERNAL_API_URL, useValue: INTERNAL },
         { provide: REQUEST, useValue: visitorRequest },
       ],
@@ -38,7 +40,7 @@ describe('InternalApiBackend', () => {
     TestBed.inject(InternalApiBackend)
       .handle(new HttpRequest('GET', url))
       .subscribe();
-    return fetch.sent[0];
+    return sent[0];
   }
 
   it('sends an API call straight to the API, with the visitor’s address', () => {
@@ -51,6 +53,7 @@ describe('InternalApiBackend', () => {
 
     expect(sent.url).toBe(`${INTERNAL}/projects`);
     expect(sent.headers.get('X-Forwarded-For')).toBe('203.0.113.7');
+    expect(sent.timeout).toBe(INTERNAL_API_TIMEOUT_MS);
   });
 
   it('recognises its own API once Angular has made the URL absolute', () => {
@@ -69,6 +72,15 @@ describe('InternalApiBackend', () => {
     );
 
     expect(sent.url).toBe('https://example.com/api/projects');
+  });
+
+  it('leaves a protocol-relative URL to another site alone', () => {
+    const sent = send(
+      '//example.com/api/projects',
+      new Request('https://underwoodstyles.ca/work'),
+    );
+
+    expect(sent.url).toBe('//example.com/api/projects');
   });
 
   it('adds no address when there is no visitor, as when prerendering', () => {

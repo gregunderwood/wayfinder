@@ -8,12 +8,12 @@ import express from 'express';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProjectSummary } from '@wayfinder/domain';
+import { INTERNAL_API_TIMEOUT_MS } from './app/core/internal-api.backend';
+import { RETRY_AFTER_SECONDS } from './app/core/page-data';
 import { buildSitemap, listSitemapPaths } from './app/core/sitemap';
 import { INTERNAL_API_URL_FROM_ENV } from './internal-api-url';
 
 const DEFAULT_PORT = 4000;
-const API_TIMEOUT_MS = 5_000;
-const RETRY_AFTER_SECONDS = '60';
 
 const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
@@ -63,7 +63,7 @@ app.use('/**', (request, response, next) => {
 
 async function fetchPublishedSlugs(): Promise<string[]> {
   const response = await fetch(`${INTERNAL_API_URL_FROM_ENV}/projects`, {
-    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`The API answered ${response.status}`);

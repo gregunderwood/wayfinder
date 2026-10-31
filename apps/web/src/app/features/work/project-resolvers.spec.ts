@@ -27,7 +27,7 @@ describe('featuredProjectsResolver', () => {
     const result = TestBed.runInInjectionContext(() =>
       featuredProjectsResolver(
         {} as ActivatedRouteSnapshot,
-        {} as RouterStateSnapshot,
+        { url: '/' } as RouterStateSnapshot,
       ),
     ) as Promise<unknown>;
     return { result, backend };

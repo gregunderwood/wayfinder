@@ -336,6 +336,11 @@ Caddy and TLS.
   `https://<page origin>/api/...` before the backend sees it.
 - **It forwards the visitor's address as `X-Forwarded-For`**, so the API's rate limits count
   visitors rather than the web container.
+- **It gives up after 5 seconds**, so a hung API turns into a 503 rather than a render that never
+  finishes. The sitemap uses the same limit.
+- **A failure travels with the page.** The transfer cache keeps only successful responses, so
+  `loadContent` puts a 404 or an outage in `TransferState`. The browser shows what the server
+  rendered instead of asking again, and cannot hydrate different content over it.
 
 **Status codes.** Each resolver returns a `PageData<T>`: `ready`, `not-found` or `unavailable`
 (`core/page-data.ts`), and sets the status through `RESPONSE_INIT` as it does.
