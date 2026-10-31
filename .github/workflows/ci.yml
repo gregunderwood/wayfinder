@@ -95,7 +95,7 @@ jobs:
           expect 200 https://localhost/work
           expect 200 https://localhost/work/gateway
           expect 404 https://localhost/work/no-such-project
-          curl -sk https://localhost/work/gateway | grep -q '<h1>Gateway</h1>' || { echo 'the project page did not render from the API'; exit 1; }
+          curl -sk https://localhost/work/gateway | grep -q '>Gateway</h1>' || { echo 'the project page did not render from the API'; exit 1; }
           curl -sk https://localhost/sitemap.xml | grep -q '/work/wayfinder</loc>' || { echo 'the sitemap lacks the seeded projects'; exit 1; }
           expect 200 https://localhost/sitemap.xml
           expect 404 https://localhost/no-such-page
