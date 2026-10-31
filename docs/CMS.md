@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1–3.4 built.** Section 3.5 is the agreed design, not yet code. Anything listed
+Status: **3.1–3.3 built.** Section 3.5 is the agreed design, not yet code; 3.4 and 3.6 are designed in their GitHub issues. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -59,7 +59,7 @@ Anything sensitive in the database is protected so that a copy of the database, 
 not enough to read it or to sign in. There are three layers, and every new column is put in one:
 
 1. **Every disk and backup is encrypted at rest.** The host's root volume already is; the Postgres
-   data volume (3.6) is too, and the S3 backups use server-side encryption. This covers
+   data volume (3.1) is too, and the S3 backups use server-side encryption. This covers
    everything, but only against someone holding the raw disk.
 2. **What only needs verifying is hashed, not encrypted:** passwords (argon2id) and refresh tokens
    (SHA-256). Anything that can be decrypted can leak; a hash cannot be turned back.
@@ -83,7 +83,7 @@ example, loads the single admin row and compares the email after decrypting it; 
 second admin to look up.
 
 **The key is part of the backup plan.** A restored dump is unreadable without
-`DATA_ENCRYPTION_KEY`, so the restore drill (3.6) proves the key is recoverable as well as the
+`DATA_ENCRYPTION_KEY`, so the restore drill (3.1) proves the key is recoverable as well as the
 data. Losing the key loses every layer-3 value.
 
 ### 3.2 Auth
@@ -225,7 +225,7 @@ exercised as they run in production, including two writes racing for one slug. R
 and validation are tested through HTTP with `useTestApp()`. `src/app/projects/**` joins the
 coverage `include` list.
 
-### 3.4 Admin UI
+### 3.3 Admin UI
 
 **Routes.**
 
