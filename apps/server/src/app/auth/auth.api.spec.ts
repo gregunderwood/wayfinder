@@ -1,4 +1,4 @@
-import { ApiErrorCode } from '@wayfinder/domain';
+import { ApiErrorCode, SIGNED_IN_HINT_COOKIE } from '@wayfinder/domain';
 import { cookieValues, useTestApp } from '../../testing/test-app';
 import { useTestDatabase } from '../../testing/test-database';
 import { TEST_DATA_ENCRYPTION_KEY } from '../../testing/test-secrets';
@@ -52,6 +52,17 @@ describe('auth API', () => {
     expect(refreshCookie).toMatch(/; Max-Age=1209600;/);
     expect(refreshCookie).toMatch(/; Path=\/api\/auth;/);
     expect(refreshCookie).toMatch(/; HttpOnly; Secure; SameSite=Strict$/);
+  });
+
+  it('also sets a site-wide hint the page can read, which holds no secret', async () => {
+    const response = await send('POST', '/auth/login', {
+      body: { email: EMAIL, password: PASSWORD },
+    });
+
+    const hint = setCookieFor(response.setCookies, SIGNED_IN_HINT_COOKIE);
+    expect(hint).toMatch(/^wf_signed_in=1; Max-Age=1209600; Path=\/;/);
+    expect(hint).toMatch(/; Secure; SameSite=Lax$/);
+    expect(hint).not.toMatch(/HttpOnly/);
   });
 
   it('returns the profile to a signed-in admin', async () => {
@@ -155,11 +166,25 @@ describe('auth API', () => {
     expect(cookieValues(loggedOut.setCookies)).toEqual({
       [ACCESS_COOKIE]: '',
       [REFRESH_COOKIE]: '',
+      [SIGNED_IN_HINT_COOKIE]: '',
     });
 
     const afterLogout = await send('POST', '/auth/refresh', {
       cookies: rotated,
     });
     expect(afterLogout.status).toBe(401);
+  });
+
+  it('clears every session cookie when a refresh is refused, so the page stops asking', async () => {
+    const response = await send('POST', '/auth/refresh', {
+      cookies: { [REFRESH_COOKIE]: 'not-a-real-token' },
+    });
+
+    expect(response.status).toBe(401);
+    expect(cookieValues(response.setCookies)).toEqual({
+      [ACCESS_COOKIE]: '',
+      [REFRESH_COOKIE]: '',
+      [SIGNED_IN_HINT_COOKIE]: '',
+    });
   });
 });

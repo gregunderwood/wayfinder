@@ -13,7 +13,12 @@ import {
   ProjectStatus,
   type UpdateProjectPayload,
 } from '@wayfinder/domain';
-import { QueryFailedError, Repository, type SelectQueryBuilder } from 'typeorm';
+import {
+  type FindOptionsWhere,
+  QueryFailedError,
+  Repository,
+  type SelectQueryBuilder,
+} from 'typeorm';
 import { Clock } from '../common/clock';
 import { ProjectEntity, SLUG_INDEX } from './models';
 
@@ -50,7 +55,11 @@ export class ProjectsService {
   }
 
   async findById(id: string): Promise<AdminProject> {
-    return toAdminProject(await this.requireProject(id));
+    return toAdminProject(await this.requireProject({ id }));
+  }
+
+  async findBySlug(slug: string): Promise<AdminProject> {
+    return toAdminProject(await this.requireProject({ slug }));
   }
 
   async create(payload: CreateProjectPayload): Promise<AdminProject> {
@@ -72,7 +81,7 @@ export class ProjectsService {
     id: string,
     payload: UpdateProjectPayload,
   ): Promise<AdminProject> {
-    const project = await this.requireProject(id);
+    const project = await this.requireProject({ id });
     const changes = withoutUnchangedFields(payload);
     const slug = changes.slug ?? project.slug;
     if (slug !== project.slug) {
@@ -87,7 +96,7 @@ export class ProjectsService {
     await this.claimingSlug(slug, () =>
       this.projects.update(id, { ...changes, publishedAt }),
     );
-    return toAdminProject(await this.requireProject(id));
+    return toAdminProject(await this.requireProject({ id }));
   }
 
   async remove(id: string): Promise<void> {
@@ -111,8 +120,10 @@ export class ProjectsService {
       .addOrderBy('project.slug', 'ASC');
   }
 
-  private async requireProject(id: string): Promise<ProjectEntity> {
-    const project = await this.projects.findOneBy({ id });
+  private async requireProject(
+    where: FindOptionsWhere<ProjectEntity>,
+  ): Promise<ProjectEntity> {
+    const project = await this.projects.findOneBy(where);
     if (!project) {
       throw projectNotFound();
     }

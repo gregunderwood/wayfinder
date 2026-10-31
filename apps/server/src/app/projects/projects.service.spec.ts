@@ -332,6 +332,24 @@ describe('ProjectsService', () => {
       );
     });
 
+    it('finds a draft by its slug', async () => {
+      const { id } = await projects.create(
+        aProject({ status: ProjectStatus.Draft }),
+      );
+
+      expect(await projects.findBySlug('tempestas')).toEqual(
+        expect.objectContaining({ id }),
+      );
+    });
+
+    it('answers an unknown slug with a 404', async () => {
+      await expectApiError(
+        projects.findBySlug('nope'),
+        404,
+        ApiErrorCode.NotFound,
+      );
+    });
+
     it('answers an unknown id with a 404', async () => {
       await expectApiError(
         projects.findById(MISSING_ID),

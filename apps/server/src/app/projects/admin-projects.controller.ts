@@ -27,6 +27,11 @@ export class AdminProjectsController {
     return this.projects.listAll();
   }
 
+  @Get('by-slug/:slug')
+  showBySlug(@Param('slug') slug: string): Promise<AdminProject> {
+    return this.projects.findBySlug(slug);
+  }
+
   @Get(':id')
   show(@Param('id', ParseUUIDPipe) id: string): Promise<AdminProject> {
     return this.projects.findById(id);

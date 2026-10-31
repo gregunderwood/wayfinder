@@ -1,4 +1,4 @@
-import { ADMIN_HOME_PATH, safeReturnUrl } from './admin-paths';
+import { ADMIN_HOME_PATH, isAdminPath, safeReturnUrl } from './admin-paths';
 
 describe('safeReturnUrl', () => {
   it.each(['/admin/projects/7d3c1f9e', '/admin', '/admin?tab=drafts'])(
@@ -18,4 +18,20 @@ describe('safeReturnUrl', () => {
   ])('goes to the admin home instead of %s', (_case, returnUrl) => {
     expect(safeReturnUrl(returnUrl)).toBe(ADMIN_HOME_PATH);
   });
+});
+
+describe('isAdminPath', () => {
+  it.each(['/admin', '/admin/projects', '/admin?x=1', '/admin#main'])(
+    'counts %s as the admin',
+    (url) => {
+      expect(isAdminPath(url)).toBe(true);
+    },
+  );
+
+  it.each(['', '/', '/work', '/administrator'])(
+    'counts %s as public',
+    (url) => {
+      expect(isAdminPath(url)).toBe(false);
+    },
+  );
 });

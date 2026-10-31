@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1–3.3 built.** Section 3.5 is the agreed design, not yet code; 3.4 and 3.6 are designed in their GitHub issues. Anything listed
+Status: **3.1–3.4 built.** Section 3.5 is the agreed design, not yet code; 3.6 is designed in its GitHub issue. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -111,20 +111,23 @@ account and no default password anywhere.
 an unknown email still verifies against a fixed dummy hash, so response time does not reveal
 whether the account exists.
 
-**Sessions.** Two cookies, both `HttpOnly` and `Secure`:
+**Sessions.** Two session cookies, both `HttpOnly` and `Secure`, and a hint the page can read:
 
-| Cookie       | Holds                                                 | Lifetime   | `SameSite` | `Path`      |
-| ------------ | ----------------------------------------------------- | ---------- | ---------- | ----------- |
-| `wf_access`  | JWT (HS256, `sub` = admin id), signed by `JWT_SECRET` | 15 minutes | `Lax`      | `/api`      |
-| `wf_refresh` | 32 random bytes; only the SHA-256 is stored           | 14 days    | `Strict`   | `/api/auth` |
+| Cookie         | Holds                                                 | Lifetime   | `SameSite` | `Path`      |
+| -------------- | ----------------------------------------------------- | ---------- | ---------- | ----------- |
+| `wf_access`    | JWT (HS256, `sub` = admin id), signed by `JWT_SECRET` | 15 minutes | `Lax`      | `/api`      |
+| `wf_refresh`   | 32 random bytes; only the SHA-256 is stored           | 14 days    | `Strict`   | `/api/auth` |
+| `wf_signed_in` | `1`; not `HttpOnly`, and grants nothing               | 14 days    | `Lax`      | `/`         |
 
 `wf_refresh` is scoped to `/api/auth` rather than `/api/auth/refresh` because logout needs it too,
-to revoke its family.
+to revoke its family. `wf_signed_in` exists because the session cookies are invisible to a public
+page; it only tells the page whether asking `/api/auth/me` is worth a request (see 3.4).
 
 A refresh rotates: the presented token is revoked and a new one is issued in the same
 `family_id`. Presenting a token that was already revoked means it was copied, so the whole family
-is revoked and the admin must sign in again. Logout revokes the current family and clears both
-cookies.
+is revoked and the admin must sign in again. Logout revokes the current family and clears all three
+cookies, and so does a refused refresh, so a dead session stops being checked. A refresh that fails
+for any other reason, such as the database being down, leaves them alone.
 
 Locally the API is plain HTTP behind the dev proxy, and browsers drop `Secure` cookies there except
 on `localhost`, which they treat as secure. Use `localhost`, not `127.0.0.1`.
@@ -135,12 +138,12 @@ which a cross-site HTML form cannot send without a preflight that will fail.
 
 **Endpoints.**
 
-| Method and path          | Body                  | Success                   | Failure                                     |
-| ------------------------ | --------------------- | ------------------------- | ------------------------------------------- |
-| `POST /api/auth/login`   | `{ email, password }` | 204, sets both cookies    | 401 `InvalidCredentials`; 429 `RateLimited` |
-| `POST /api/auth/refresh` | none                  | 204, rotates both cookies | 401 `Unauthorized`                          |
-| `POST /api/auth/logout`  | none                  | 204, clears both cookies  | none                                        |
-| `GET /api/auth/me`       | none                  | 200 `AdminProfile`        | 401 `Unauthorized`                          |
+| Method and path          | Body                  | Success                  | Failure                                     |
+| ------------------------ | --------------------- | ------------------------ | ------------------------------------------- |
+| `POST /api/auth/login`   | `{ email, password }` | 204, sets the cookies    | 401 `InvalidCredentials`; 429 `RateLimited` |
+| `POST /api/auth/refresh` | none                  | 204, rotates the cookies | 401 `Unauthorized`, clearing them           |
+| `POST /api/auth/logout`  | none                  | 204, clears the cookies  | none                                        |
+| `GET /api/auth/me`       | none                  | 200 `AdminProfile`       | 401 `Unauthorized`                          |
 
 **Guarding.** `AdminGuard` verifies `wf_access` itself through `AccessTokens`; with one cookie and
 one pinned algorithm, a Passport strategy would add a dependency and nothing else. It applies at
@@ -185,15 +188,16 @@ characters is a 400. Links must be `http` or `https`, so a `javascript:` URL nev
 
 **Endpoints.**
 
-| Method and path                  | Who    | Returns                                                          |
-| -------------------------------- | ------ | ---------------------------------------------------------------- |
-| `GET /api/projects`              | Public | Published projects, in `sort_order`                              |
-| `GET /api/projects/:slug`        | Public | One published project; a draft or a missing slug is the same 404 |
-| `GET /api/admin/projects`        | Admin  | Every project, as `AdminProject`                                 |
-| `GET /api/admin/projects/:id`    | Admin  | One project, draft or published; 404 for an unknown id           |
-| `POST /api/admin/projects`       | Admin  | 201; 409 `SlugTaken`                                             |
-| `PATCH /api/admin/projects/:id`  | Admin  | 200; 409 `SlugTaken`; 404 for an unknown id                      |
-| `DELETE /api/admin/projects/:id` | Admin  | 204; 404 for an unknown id                                       |
+| Method and path                         | Who    | Returns                                                          |
+| --------------------------------------- | ------ | ---------------------------------------------------------------- |
+| `GET /api/projects`                     | Public | Published projects, in `sort_order`                              |
+| `GET /api/projects/:slug`               | Public | One published project; a draft or a missing slug is the same 404 |
+| `GET /api/admin/projects`               | Admin  | Every project, as `AdminProject`                                 |
+| `GET /api/admin/projects/:id`           | Admin  | One project, draft or published; 404 for an unknown id           |
+| `GET /api/admin/projects/by-slug/:slug` | Admin  | The same, by slug, for a public page's edit link                 |
+| `POST /api/admin/projects`              | Admin  | 201; 409 `SlugTaken`                                             |
+| `PATCH /api/admin/projects/:id`         | Admin  | 200; 409 `SlugTaken`; 404 for an unknown id                      |
+| `DELETE /api/admin/projects/:id`        | Admin  | 204; 404 for an unknown id                                       |
 
 An `:id` that is not a UUID is a 400 before the database is asked. Both lists are in `sort_order`,
 then slug.
@@ -252,7 +256,9 @@ lazy-loaded, so none of its code reaches a public page's bundle.
 - `core/api-error.interceptor.ts` is the only place HTTP errors are handled. On 401 `Unauthorized`
   it calls `/api/auth/refresh` once and retries; if that fails it forgets the signed-in admin and
   routes to `/admin/login` with a return URL. Components see a typed `ApiError`, never an `HttpErrorResponse`.
-  Requests that fail together share one refresh, because the refresh token rotates on use. A call
+  Requests that fail together share one refresh, because the refresh token rotates on use; other
+  tabs take turns under a Web Lock (`SessionRefresher`), so each presents the token the last one
+  issued instead of a revoked one, which would sign the admin out everywhere. A call
   marked `REDIRECT_TO_SIGN_IN: false` (the guard's `/me`) is refreshed but not redirected.
 - `core/auth/` holds a signal of the current admin, loaded from `/api/auth/me`, and an `adminGuard`
   (`CanMatch`) on the `/admin` subtree. Anything short of a confirmed session, an unreachable API
@@ -277,6 +283,33 @@ they load with the lazy admin chunk and never reach a public page's stylesheet.
 
 Same rules as the rest of the app: standalone, signals, `OnPush`, `inject()`, inline SVG, no
 `ngModel`, no browser globals outside `afterNextRender`.
+
+### 3.4 Admin shortcuts on the public site
+
+Signed in and browsing the public site, the admin sees where they are and can get back; signed out,
+the footer offers the way in.
+
+**Knowing who is signed in, without costing visitors anything.** After hydration, `AdminSession.restore()`
+asks `/api/auth/me` only when the `wf_signed_in` cookie is present. A visitor makes no request, and
+the prerendered and server-rendered HTML never changes with the session. With the hint but an expired
+access token, the usual one refresh applies; if it is refused, the server clears the hint, so the
+next page does not ask again.
+
+| Piece                                                    | Shown                                                           | Where it lives                                                                 |
+| -------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Signed-in bar: "Signed in as …", an Admin link, Sign out | Signed in, on public pages (the admin pages have their own bar) | `features/admin/shortcuts/signed-in-bar.ts`, `@defer`red from `App`            |
+| "Edit this project" on `/work/:slug`                     | Signed in, and the database has that slug                       | `features/admin/shortcuts/edit-project-link.ts`, `@defer`red from `WorkDetail` |
+| "Admin sign in" in the footer, `rel="nofollow"`          | Signed out, on public pages                                     | `App`                                                                          |
+
+Both shortcuts are `@defer`red, so their code downloads only for a signed-in admin. The edit link
+finds the project through `GET /api/admin/projects/by-slug/:slug`, because the public `Project`
+carries no id. Its request is marked `REDIRECT_TO_SIGN_IN: false`: a session ending on a public
+page removes the bar rather than sending the reader to sign in. A slug the database lacks gets no
+link.
+
+Signing out from the bar keeps the reader on the page. The Sign out button is shared with the
+admin shell (`features/admin/sign-out-button.ts`) and reports a failure in place, leaving the admin
+signed in.
 
 ### 3.5 Public pages from the API
 
