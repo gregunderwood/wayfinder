@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -48,8 +49,16 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
-    const session = await this.auth.refresh(readRefreshCookie(request));
-    setSessionCookies(response, session);
+    try {
+      const session = await this.auth.refresh(readRefreshCookie(request));
+      setSessionCookies(response, session);
+    } catch (error) {
+      // Only a refused refresh: a passing server fault must not sign the admin out.
+      if (error instanceof UnauthorizedException) {
+        clearSessionCookies(response);
+      }
+      throw error;
+    }
   }
 
   @Post('logout')

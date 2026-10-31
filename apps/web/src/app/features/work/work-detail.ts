@@ -9,20 +9,29 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { Project } from '@wayfinder/domain';
+import { AdminSession } from '../../core/auth/admin-session';
 import { PROJECT_KIND_LABELS, findProject } from '../../content/projects';
 import { renderMarkdown } from '../../core/markdown';
 import { SeoService } from '../../core/seo.service';
 import { buildProjectJsonLd } from '../../core/structured-data';
+import { EditProjectLink } from '../admin/shortcuts/edit-project-link';
 
 @Component({
   selector: 'wf-work-detail',
-  imports: [RouterLink],
+  imports: [RouterLink, EditProjectLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (project(); as project) {
       <article>
         <header class="page-head wrap">
-          <p class="back"><a routerLink="/work">← All work</a></p>
+          <p class="back">
+            <a routerLink="/work">← All work</a>
+            @if (session.admin()) {
+              @defer (on immediate) {
+                <wf-edit-project-link [slug]="project.slug" />
+              }
+            }
+          </p>
           <p class="eyebrow">{{ kindLabels[project.kind] }}</p>
           <h1>{{ project.name }}</h1>
           <p class="lead">{{ project.tagline }}</p>
@@ -77,6 +86,11 @@ import { buildProjectJsonLd } from '../../core/structured-data';
   `,
   styles: `
     .back {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
       margin-bottom: var(--space-4);
     }
     .facts {
@@ -108,6 +122,7 @@ export class WorkDetail {
   });
   protected readonly kindLabels = PROJECT_KIND_LABELS;
 
+  protected readonly session = inject(AdminSession);
   private readonly seo = inject(SeoService);
   private readonly responseInit = inject(RESPONSE_INIT, { optional: true });
 

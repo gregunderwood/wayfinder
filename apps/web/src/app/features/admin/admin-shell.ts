@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   inject,
-  signal,
   ViewEncapsulation,
 } from '@angular/core';
 import {
@@ -13,10 +12,11 @@ import {
 } from '@angular/router';
 import { SIGN_IN_PATH } from '../../core/auth/admin-paths';
 import { AdminSession } from '../../core/auth/admin-session';
+import { SignOutButton } from './sign-out-button';
 
 @Component({
   selector: 'wf-admin-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, SignOutButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="admin-bar">
@@ -33,15 +33,8 @@ import { AdminSession } from '../../core/auth/admin-session';
           @if (session.admin(); as admin) {
             <span class="muted">{{ admin.email }}</span>
           }
-          <button type="button" class="btn btn-small" (click)="signOut()">
-            Sign out
-          </button>
+          <wf-sign-out-button (signedOut)="showSignIn()" />
         </p>
-        @if (signOutFailed()) {
-          <p class="field-error" role="alert">
-            Signing out failed. Check the connection and try again.
-          </p>
-        }
       </div>
     </div>
     <router-outlet />
@@ -53,16 +46,8 @@ import { AdminSession } from '../../core/auth/admin-session';
 export class AdminShell {
   protected readonly session = inject(AdminSession);
   private readonly router = inject(Router);
-  protected readonly signOutFailed = signal(false);
 
-  protected async signOut(): Promise<void> {
-    this.signOutFailed.set(false);
-    try {
-      await this.session.signOut();
-    } catch {
-      this.signOutFailed.set(true);
-      return;
-    }
-    await this.router.navigateByUrl(SIGN_IN_PATH);
+  protected showSignIn(): void {
+    void this.router.navigateByUrl(SIGN_IN_PATH);
   }
 }

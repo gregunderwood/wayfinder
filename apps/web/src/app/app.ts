@@ -1,13 +1,37 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
+import { Location } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
+import {
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
+import { filter, map } from 'rxjs';
+import { isAdminPath, SIGN_IN_PATH } from './core/auth/admin-paths';
+import { AdminSession } from './core/auth/admin-session';
 import { PERSON } from './core/site.config';
+import { SignedInBar } from './features/admin/shortcuts/signed-in-bar';
 
 @Component({
   selector: 'wf-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, SignedInBar],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="skip-link" href="#main">Skip to content</a>
+
+    @if (showsSignedInBar()) {
+      @defer (on immediate) {
+        <wf-signed-in-bar />
+      }
+    }
 
     <header class="site-header no-print">
       <div class="wrap bar">
@@ -40,6 +64,9 @@ import { PERSON } from './core/site.config';
           © {{ year }} {{ person.name }} · {{ person.locality }},
           {{ person.region }} ·
           <a [href]="'mailto:' + person.email">{{ person.email }}</a>
+          @if (showsSignInLink()) {
+            · <a [routerLink]="signInPath" rel="nofollow">Admin sign in</a>
+          }
         </p>
       </div>
     </footer>
@@ -117,6 +144,26 @@ import { PERSON } from './core/site.config';
   `,
 })
 export class App {
+  private readonly session = inject(AdminSession);
+  private readonly router = inject(Router);
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event) => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    // The router's URL is "/" until its first navigation ends; the address bar is already right.
+    { initialValue: inject(Location).path() },
+  );
+  private readonly isOnPublicPage = computed(() => !isAdminPath(this.url()));
+
+  // The admin pages have their own bar, and the sign-in page needs no link to itself.
+  protected readonly showsSignedInBar = computed(
+    () => this.isOnPublicPage() && this.session.admin() !== null,
+  );
+  protected readonly showsSignInLink = computed(
+    () => this.isOnPublicPage() && this.session.admin() === null,
+  );
+  protected readonly signInPath = SIGN_IN_PATH;
   protected readonly person = PERSON;
   protected readonly year = new Date().getFullYear();
   protected readonly links = [
@@ -124,4 +171,8 @@ export class App {
     { path: '/about', label: 'About' },
     { path: '/resume', label: 'Résumé' },
   ];
+
+  constructor() {
+    afterNextRender(() => void this.session.restore());
+  }
 }

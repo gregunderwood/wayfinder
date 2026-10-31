@@ -69,6 +69,7 @@ describe('projects API', () => {
   it.each<[HttpMethod, string]>([
     ['GET', '/admin/projects'],
     ['GET', `/admin/projects/${SOME_ID}`],
+    ['GET', '/admin/projects/by-slug/tempestas'],
     ['POST', '/admin/projects'],
     ['PATCH', `/admin/projects/${SOME_ID}`],
     ['DELETE', `/admin/projects/${SOME_ID}`],
@@ -115,6 +116,20 @@ describe('projects API', () => {
     expect(adminList.body).toEqual([
       expect.objectContaining({ status: ProjectStatus.Draft }),
     ]);
+  });
+
+  it('finds a project by its slug for the admin, and answers 404 for an unknown one', async () => {
+    const { id } = await createProject();
+
+    const found = await send('GET', '/admin/projects/by-slug/tempestas', {
+      cookies: adminCookies,
+    });
+    const missing = await send('GET', '/admin/projects/by-slug/nope', {
+      cookies: adminCookies,
+    });
+
+    expect(found.body).toEqual(expect.objectContaining({ id }));
+    expect(missing.status).toBe(404);
   });
 
   it('shows the admin one project by its id', async () => {

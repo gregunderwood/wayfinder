@@ -58,6 +58,16 @@ export class ApiService {
     );
   }
 
+  /** For a public page's edit link, which should vanish rather than redirect when signed out. */
+  adminProjectBySlug(slug: string): Promise<AdminProject> {
+    return this.send(
+      this.http.get<AdminProject>(
+        `${API}/admin/projects/by-slug/${encodeURIComponent(slug)}`,
+        { context: new HttpContext().set(REDIRECT_TO_SIGN_IN, false) },
+      ),
+    );
+  }
+
   createProject(payload: CreateProjectPayload): Promise<AdminProject> {
     return this.send(
       this.http.post<AdminProject>(`${API}/admin/projects`, payload),

@@ -34,6 +34,9 @@ Public: `/` · `/about` · `/work` · `/work/:slug` · `/blog` · `/blog/:slug` 
 `/testimonials` · `/contact` · `/resume`. Admin: `/admin/login`, then `/admin/*` behind
 `adminGuard`; all `RenderMode.Client`, `noindex` by meta tag and Caddy's `X-Robots-Tag`
 (not `robots.txt`, which would hide the `noindex`). The design is in [CMS.md § 3.3 Admin UI](CMS.md#33-admin-ui).
+Signed in, public pages show a signed-in bar and project pages an edit link; signed out, the footer
+links to sign-in. Both are client-only, so prerendered HTML is the same for everyone
+([CMS.md § 3.4](CMS.md#34-admin-shortcuts-on-the-public-site)).
 
 ### Rendering
 

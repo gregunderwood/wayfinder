@@ -1,3 +1,4 @@
+import { SIGNED_IN_HINT_COOKIE } from '@wayfinder/domain';
 import type { CookieOptions, Request, Response } from 'express';
 import {
   ACCESS_TOKEN_LIFETIME_MS,
@@ -23,6 +24,14 @@ const REFRESH_COOKIE_OPTIONS: CookieOptions = {
   path: '/api/auth',
 };
 
+// Not httpOnly, and site-wide: public pages read it to decide whether to ask who is signed in.
+const SIGNED_IN_HINT_OPTIONS: CookieOptions = {
+  secure: true,
+  sameSite: 'lax',
+  path: '/',
+};
+const SIGNED_IN_HINT_VALUE = '1';
+
 export function setSessionCookies(
   response: Response,
   session: IssuedSession,
@@ -35,11 +44,16 @@ export function setSessionCookies(
     ...REFRESH_COOKIE_OPTIONS,
     maxAge: REFRESH_TOKEN_LIFETIME_MS,
   });
+  response.cookie(SIGNED_IN_HINT_COOKIE, SIGNED_IN_HINT_VALUE, {
+    ...SIGNED_IN_HINT_OPTIONS,
+    maxAge: REFRESH_TOKEN_LIFETIME_MS,
+  });
 }
 
 export function clearSessionCookies(response: Response): void {
   response.clearCookie(ACCESS_COOKIE, ACCESS_COOKIE_OPTIONS);
   response.clearCookie(REFRESH_COOKIE, REFRESH_COOKIE_OPTIONS);
+  response.clearCookie(SIGNED_IN_HINT_COOKIE, SIGNED_IN_HINT_OPTIONS);
 }
 
 export function readAccessCookie(request: Request): string | undefined {
