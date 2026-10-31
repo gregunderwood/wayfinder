@@ -47,9 +47,11 @@ mounted, so Postgres can never quietly write to the root disk. `release.sh` then
    still serve. If a migration fails, it rolls itself back, any earlier ones from the same run are
    reverted, and the deploy stops with the old release serving.
 3. **Switches** every container and waits for its healthcheck.
-4. **If the new release never becomes healthy,** it reverts exactly the migrations it applied,
-   still with the new image (only it has their `down`), restores the previous images, and fails
-   the workflow. The log says which migrations it reverted and which images it restored.
+4. **If the new release never becomes healthy,** it restores the previous images, then reverts
+   exactly the migrations it applied, still with the new image (only it has their `down`), and
+   fails the workflow. Images go first because the old API runs on the new schema, while the new
+   API would not run on the old one. The log says what it restored and reverted, and starts a
+   line with `ROLLBACK INCOMPLETE` if any part of that failed.
 
 This works because migrations expand before they contract
 ([Code Quality](Code%20Quality.md#-expand-then-contract)): the previous images can always run on
@@ -161,7 +163,8 @@ aws sns subscribe --profile wayfinder --region us-east-1 --protocol email \
 
 - **Backups** run nightly at 10:30 UTC: `pg_dump` to the data volume, checked with
   `pg_restore --list`, then uploaded to `s3://wayfinder-backups-742188596859/postgres/<timestamp>.dump`.
-  Every deploy adds one named `<timestamp>-pre-deploy-<sha>.dump`; `latest` picks whichever is newest.
+  Every deploy adds one named `<timestamp>-pre-deploy-<sha>.dump`. `latest` skips those, since after a
+  lost volume the newest is of an empty database; restore one by its key.
   The bucket is private, SSL-only, versioned, and expires backups after 30 days. The host can
   write and read backups but not delete them.
 - **Restoring**, from a shell on the host:

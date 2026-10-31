@@ -1,10 +1,19 @@
 const field = (name: string): Cypress.Chainable<JQuery<HTMLElement>> =>
   cy.get(`[formcontrolname="${name}"]`);
 
-function signIn(password: string): void {
+function submitSignIn(password: string): void {
   field('email').clear().type(Cypress.env('adminEmail'));
   field('password').clear().type(password);
   cy.contains('button', 'Sign in').click();
+}
+
+// One sign-in shared by the tests: the API allows five a minute.
+function signIn(): void {
+  cy.session('admin', () => {
+    cy.visit('/admin/login');
+    submitSignIn(Cypress.env('adminPassword'));
+    cy.location('pathname').should('eq', '/admin/projects');
+  });
 }
 
 describe('the admin', () => {
@@ -20,28 +29,43 @@ describe('the admin', () => {
     );
   });
 
-  it('edits a project that the public page then shows, without a deploy', () => {
+  it('refuses a wrong password', () => {
     cy.visit('/admin/login');
-    signIn('not-the-password');
-    cy.get('[role="alert"]').should('contain', 'do not match');
-    signIn(Cypress.env('adminPassword'));
-    cy.location('pathname').should('eq', '/admin/projects');
+    submitSignIn('not-the-password');
 
+    cy.get('[role="alert"]').should('contain', 'do not match');
+    cy.location('pathname').should('eq', '/admin/login');
+  });
+
+  it('edits a project that the public page then shows, without a deploy', () => {
+    signIn();
+    cy.visit('/admin/projects');
     cy.contains('a', 'Tempestas').click();
     field('slug').should('be.disabled');
-    const edited = `A greenhouse controller, edited ${Date.now()}.`;
-    field('tagline').clear().type(edited);
-    cy.contains('button', 'Save').click();
-    cy.contains('Saved.');
+    field('tagline')
+      .invoke('val')
+      .then((original) => {
+        const edited = `A greenhouse controller, edited ${Date.now()}.`;
+        field('tagline').clear().type(edited);
+        cy.contains('button', 'Save').click();
+        cy.contains('Saved.');
 
-    cy.request('/work/tempestas').its('body').should('contain', edited);
+        cy.request('/work/tempestas').its('body').should('contain', edited);
+
+        cy.intercept('PATCH', '/api/admin/projects/*').as('restore');
+        field('tagline')
+          .clear()
+          .type(String(original), { parseSpecialCharSequences: false });
+        cy.contains('button', 'Save').click();
+        cy.wait('@restore').its('response.statusCode').should('eq', 200);
+      });
   });
 
   it('refuses a taken slug, keeps a new project a draft, and deletes it', () => {
-    cy.visit('/admin/login');
-    signIn(Cypress.env('adminPassword'));
+    const slug = `end-to-end-draft-${Date.now()}`;
+    signIn();
     cy.visit('/admin/projects/new');
-    field('name').type('End-to-end draft');
+    field('name').type(slug);
     field('slug').type('lvcc');
     field('tagline').type('Temporary.');
     field('role').type('Tester');
@@ -49,17 +73,17 @@ describe('the admin', () => {
     cy.contains('button', 'Save').click();
     cy.contains('Another project uses this slug.');
 
-    field('slug').clear().type('end-to-end-draft');
+    field('slug').clear().type(slug);
     cy.contains('button', 'Save').click();
     cy.contains('Saved.');
-    cy.request({ url: '/work/end-to-end-draft', failOnStatusCode: false })
+    cy.request({ url: `/work/${slug}`, failOnStatusCode: false })
       .its('status')
       .should('eq', 404);
 
     cy.contains('button', 'Delete…').click();
     cy.contains('button', 'Delete for good').click();
     cy.location('pathname').should('eq', '/admin/projects');
-    cy.contains('End-to-end draft').should('not.exist');
+    cy.contains(slug).should('not.exist');
 
     cy.contains('button', 'Sign out').click();
     cy.location('pathname').should('eq', '/admin/login');

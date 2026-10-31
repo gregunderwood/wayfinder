@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Usage: release.sh <backup label> [<previous web image> <previous api image>]
-# Run from the compose project directory, with WEB_IMAGE and API_IMAGE naming the new release.
-# Needs BACKUP_BUCKET and AWS_REGION, for the backup taken before migrating.
+# Usage: release.sh <backup label> [<previous web image> <previous api image>], from the compose
+# directory, with WEB_IMAGE and API_IMAGE naming the new release. Needs BACKUP_BUCKET and AWS_REGION.
 set -euo pipefail
 backup_label=${1:?backup label}
 previous_web_image=${2:-}
@@ -11,7 +10,7 @@ host_directory=$(dirname "$(readlink -f "$0")")
 healthy_timeout_seconds=180
 
 main() {
-  docker compose up -d --no-recreate --wait postgres
+  docker compose up -d --no-recreate --wait --wait-timeout "$healthy_timeout_seconds" postgres
   "$host_directory/backup-database.sh" "$backup_label"
 
   local migrations_before
@@ -26,8 +25,9 @@ main() {
   if ! docker compose up -d --wait --wait-timeout "$healthy_timeout_seconds" --remove-orphans; then
     docker compose logs --tail 50 || true
     echo "The new release never became healthy."
-    revert_migrations_since "$migrations_before"
+    # The previous images run on the new schema; the new API would not run on the old one.
     restore_previous_images
+    revert_migrations_since "$migrations_before"
     exit 1
   fi
 }
@@ -40,7 +40,8 @@ revert_migrations_since() {
   reverted_migrations=$(newest_migrations "$migrations_to_revert")
   for _ in $(seq 1 "$migrations_to_revert"); do
     if ! run_in_new_api migrate:revert; then
-      echo "Reverting failed. The restore point is the backup labelled $backup_label."
+      echo "ROLLBACK INCOMPLETE: a revert failed with $(($(count_applied_migrations) - $1)) of" \
+        "[${reverted_migrations//$'\n'/, }] still applied. The restore point is the backup labelled $backup_label."
       return
     fi
   done
@@ -48,10 +49,12 @@ revert_migrations_since() {
 }
 
 restore_previous_images() {
-  if [ -n "$previous_web_image" ]; then
-    WEB_IMAGE=$previous_web_image API_IMAGE=$previous_api_image \
-      docker compose up -d --wait --wait-timeout "$healthy_timeout_seconds" --remove-orphans
+  [ -n "$previous_web_image" ] || return 0
+  if WEB_IMAGE=$previous_web_image API_IMAGE=$previous_api_image \
+    docker compose up -d --wait --wait-timeout "$healthy_timeout_seconds" --remove-orphans; then
     echo "Rolled back: restored $previous_web_image and $previous_api_image"
+  else
+    echo "ROLLBACK INCOMPLETE: the previous images $previous_web_image and $previous_api_image never became healthy."
   fi
 }
 

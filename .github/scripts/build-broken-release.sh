@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Usage: build-broken-release.sh <tag>
-# Builds an API image with one extra migration that never becomes healthy, to exercise release.sh's
-# rollback. The migration creates ci_rollback_probe, so creating that table first makes it fail.
+# Usage: build-broken-release.sh <tag>: an API image with one extra migration, ci_rollback_probe,
+# that never becomes healthy. Creating that table first makes the migration fail instead.
 set -euo pipefail
 tag=${1:?image tag}
 migrations=apps/server/src/migrations
 probe_migration=$migrations/9999999999999-ci-rollback-probe.ts
 
-trap 'rm -f "$probe_migration"; git checkout -- "$migrations/index.ts"' EXIT
+migration_list_copy=$(mktemp)
+cp "$migrations/index.ts" "$migration_list_copy"
+trap 'rm -f "$probe_migration"; mv "$migration_list_copy" "$migrations/index.ts"' EXIT
 cat >"$probe_migration" <<'TS'
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 

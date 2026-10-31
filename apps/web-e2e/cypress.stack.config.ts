@@ -1,7 +1,6 @@
 import { defineConfig } from 'cypress';
 
-// The production images behind Caddy, as `docker compose up` runs them, with an admin made by
-// `create-admin`. These credentials exist only in CI and local stacks.
+// The compose stack, with an admin made by `create-admin` using these CI- and local-only credentials.
 export default defineConfig({
   e2e: {
     baseUrl: 'https://localhost',
