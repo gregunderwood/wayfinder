@@ -321,6 +321,26 @@ describe('ProjectsService', () => {
     });
   });
 
+  describe('reading one for the admin', () => {
+    it('finds a draft by its id', async () => {
+      const { id } = await projects.create(
+        aProject({ status: ProjectStatus.Draft }),
+      );
+
+      expect(await projects.findById(id)).toEqual(
+        expect.objectContaining({ id, status: ProjectStatus.Draft }),
+      );
+    });
+
+    it('answers an unknown id with a 404', async () => {
+      await expectApiError(
+        projects.findById(MISSING_ID),
+        404,
+        ApiErrorCode.NotFound,
+      );
+    });
+  });
+
   it('lists drafts and published projects alike for the admin', async () => {
     await projects.create(aProject({ status: ProjectStatus.Draft }));
     await projects.create(aProject({ slug: 'other', sortOrder: 1 }));

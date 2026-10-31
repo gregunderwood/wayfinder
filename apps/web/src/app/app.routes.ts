@@ -1,4 +1,5 @@
 import { Route } from '@angular/router';
+import { adminGuard } from './core/auth/admin.guard';
 
 export const appRoutes: Route[] = [
   {
@@ -26,6 +27,19 @@ export const appRoutes: Route[] = [
     path: 'resume',
     loadComponent: () =>
       import('./features/resume/resume').then((module) => module.Resume),
+  },
+  {
+    path: 'admin/login',
+    loadComponent: () =>
+      import('./features/admin/login').then((module) => module.AdminLogin),
+  },
+  {
+    path: 'admin',
+    canMatch: [adminGuard],
+    loadChildren: () =>
+      import('./features/admin/admin.routes').then(
+        (module) => module.adminRoutes,
+      ),
   },
   {
     path: '**',

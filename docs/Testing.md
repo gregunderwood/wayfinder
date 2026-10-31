@@ -83,6 +83,9 @@ replaced by a small hand-written class, never a deep `vi.fn()` chain.
 - **A migration missing from `migrations/index.ts` fails the tests,** because the test database
   is built from that list. That is deliberate: the image uses the same list.
 - **Coverage thresholds only run under `--coverage`.** That is why it is part of the gate.
+- **Cypress fails with `bad option: --no-sandbox` from a VS Code terminal.** VS Code sets
+  `ELECTRON_RUN_AS_NODE=1`, which makes Cypress's Electron start as plain Node. Run it with
+  `env -u ELECTRON_RUN_AS_NODE npx nx e2e web-e2e`.
 
 ## When to update this file
 

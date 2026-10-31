@@ -15,7 +15,7 @@ moderating testimonials. One Nx workspace, three projects plus an e2e suite.
 - [../apps/server/src/main.ts](../apps/server/src/main.ts) — API bootstrap, global `/api` prefix, `migrate:*` commands
 - [../apps/server/src/database.ts](../apps/server/src/database.ts) — the one Postgres config shared by the API, the bundled migration runner and the TypeORM CLI
 - [../apps/server/src/app/common/api-exception.filter.ts](../apps/server/src/app/common/api-exception.filter.ts) — turns every thrown error into an `ApiError` body
-- [../docker-compose.yml](../docker-compose.yml) / [../Caddyfile](../Caddyfile) — the production stack; Caddy sends `/api/*` to the API and everything else to SSR
+- [../docker-compose.yml](../docker-compose.yml) / [../caddy/Caddyfile](../caddy/Caddyfile) — the production stack; Caddy sends `/api/*` to the API and everything else to SSR
 - [../libs/domain/src/index.ts](../libs/domain/src/index.ts) — the shared contract and its invariant
 
 ## How it works

@@ -17,7 +17,7 @@ read -r instance public_ip < <(aws ec2 describe-instances \
 echo "Deploying $IMAGE_TAG to $instance ($public_ip)"
 
 release_bundle=$(tar czf - docker-compose.yml docker-compose.production.yml \
-  Caddyfile deploy/host | base64 -w0)
+  caddy deploy/host | base64 -w0)
 
 # A failed rollout restores the previous tag, whose images are still local
 # because pruning runs only after success.
@@ -71,6 +71,8 @@ if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans; then
   fi
   exit 1
 fi
+# A reload validates the new Caddyfile first and keeps serving the old one if it is invalid.
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 docker image prune -af >/dev/null
 docker compose ps --format '{{.Service}}: {{.Status}}'
 SCRIPT
@@ -112,5 +114,7 @@ expect_status 200 "https://$SITE_DOMAIN/"
 expect_status 200 "https://$SITE_DOMAIN/sitemap.xml"
 expect_status 404 "https://$SITE_DOMAIN/no-such-page"
 expect_status 308 "http://$SITE_DOMAIN/"
+fetch_from_host -o /dev/null -D - "https://$SITE_DOMAIN/admin/login" |
+  grep -qi '^x-robots-tag: noindex' || { echo "/admin is missing X-Robots-Tag"; exit 1; }
 fetch_from_host "https://$SITE_DOMAIN/api/health" | tee /dev/stderr |
   jq -e '.databaseReachable' >/dev/null

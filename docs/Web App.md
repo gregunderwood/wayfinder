@@ -16,9 +16,10 @@ and, under `/admin`, the CMS.
 ### Layout
 
 ```
-core/      site.config.ts (identity + SITE_URL), seo.service.ts, structured-data.ts, sitemap.ts, markdown.ts
+core/      site.config.ts (identity + SITE_URL), seo.service.ts, structured-data.ts, sitemap.ts, markdown.ts,
+           api.service.ts + api-error.interceptor.ts (the API seam), auth/ (admin session and guard)
 content/   hardcoded projects, skills and résumé — typed against @wayfinder/domain where the CMS will serve them
-features/  home, about, work (list + detail), resume, not-found; admin/* arrives with the CMS
+features/  home, about, work (list + detail), resume, not-found; admin/ (login, shell, projects), lazy-loaded
 shared/    project-card, skill-matrix
 ```
 
@@ -30,7 +31,9 @@ hold only what is specific to that component. Dark mode is a token swap under
 ### Routes
 
 Public: `/` · `/about` · `/work` · `/work/:slug` · `/blog` · `/blog/:slug` · `/blog/tag/:tag` ·
-`/testimonials` · `/contact` · `/resume`. Admin: `/admin/*`, guarded, `noindex`, `RenderMode.Client`.
+`/testimonials` · `/contact` · `/resume`. Admin: `/admin/login`, then `/admin/*` behind
+`adminGuard`; all `RenderMode.Client`, `noindex` by meta tag and Caddy's `X-Robots-Tag`
+(not `robots.txt`, which would hide the `noindex`). The design is in [CMS.md § 3.4](CMS.md#34-admin-ui).
 
 ### Rendering
 

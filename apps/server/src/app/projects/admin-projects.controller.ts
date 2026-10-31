@@ -27,6 +27,11 @@ export class AdminProjectsController {
     return this.projects.listAll();
   }
 
+  @Get(':id')
+  show(@Param('id', ParseUUIDPipe) id: string): Promise<AdminProject> {
+    return this.projects.findById(id);
+  }
+
   @Post()
   create(@Body() payload: CreateProjectDto): Promise<AdminProject> {
     return this.projects.create(payload);

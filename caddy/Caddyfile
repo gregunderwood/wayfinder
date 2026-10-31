@@ -15,6 +15,9 @@ www.{$SITE_DOMAIN} {
 		-Server
 	}
 
+	@admin path /admin /admin/*
+	header @admin X-Robots-Tag "noindex, nofollow"
+
 	handle /api/* {
 		reverse_proxy api:3000
 	}

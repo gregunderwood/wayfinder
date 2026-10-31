@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1–3.3 built.** Sections 3.4 and 3.5 are the agreed design, not yet code. Anything listed
+Status: **3.1–3.4 built.** Section 3.5 is the agreed design, not yet code. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -33,10 +33,10 @@ Built:
 - [../apps/server/src/app/projects/](../apps/server/src/app/projects/) — module, `projects.controller.ts` (public), `admin-projects.controller.ts`, service, `models.ts`, `dto/` (the field rules both payloads share)
 - [../libs/domain/src/lib/projects/project.model.ts](../libs/domain/src/lib/projects/project.model.ts) — `Project`, `AdminProject`, the payloads, the slug and tagline limits
 
-Planned (the path is part of the design):
-
-- `apps/web/src/app/core/api.service.ts`, `core/api-error.interceptor.ts`, `core/auth/`
-- `apps/web/src/app/features/admin/` — `login`, `projects` (list and editor)
+- [../apps/web/src/app/core/api.service.ts](../apps/web/src/app/core/api.service.ts) — the only caller of `HttpClient`
+- [../apps/web/src/app/core/api-error.interceptor.ts](../apps/web/src/app/core/api-error.interceptor.ts) and [api-request-error.ts](../apps/web/src/app/core/api-request-error.ts) — the one place HTTP errors are handled, and the `ApiRequestError` components see
+- [../apps/web/src/app/core/auth/](../apps/web/src/app/core/auth/) — `AdminSession`, `adminGuard`, `SessionRefresher`, `admin-paths.ts` (`safeReturnUrl`)
+- [../apps/web/src/app/features/admin/](../apps/web/src/app/features/admin/) — `login`, `admin-shell`, `projects/` (list, editor, `project-form.ts`)
 
 ## How it works
 
@@ -190,6 +190,7 @@ characters is a 400. Links must be `http` or `https`, so a `javascript:` URL nev
 | `GET /api/projects`              | Public | Published projects, in `sort_order`                              |
 | `GET /api/projects/:slug`        | Public | One published project; a draft or a missing slug is the same 404 |
 | `GET /api/admin/projects`        | Admin  | Every project, as `AdminProject`                                 |
+| `GET /api/admin/projects/:id`    | Admin  | One project, draft or published; 404 for an unknown id           |
 | `POST /api/admin/projects`       | Admin  | 201; 409 `SlugTaken`                                             |
 | `PATCH /api/admin/projects/:id`  | Admin  | 200; 409 `SlugTaken`; 404 for an unknown id                      |
 | `DELETE /api/admin/projects/:id` | Admin  | 204; 404 for an unknown id                                       |
@@ -238,26 +239,41 @@ coverage `include` list.
 
 All are `RenderMode.Client` in `app.routes.server.ts`, listed before the `**` catch-all, never
 prerendered and never in the sitemap. They carry a `noindex` meta tag, Caddy adds
-`X-Robots-Tag: noindex` for `/admin/*`, and `robots.txt` disallows `/admin`. The admin feature is
+`X-Robots-Tag: noindex` for `/admin/*`. `robots.txt` deliberately does not disallow `/admin`: a
+crawler that may not fetch a page never sees its `noindex`, and can still index the bare URL. The admin feature is
 lazy-loaded, so none of its code reaches a public page's bundle.
 
 **Plumbing.**
 
 - `core/api.service.ts` is the only class that calls `HttpClient`. Every method is typed from
-  `@wayfinder/domain`.
+  `@wayfinder/domain` and returns a Promise. Every write sends a JSON body, `{}` when there is
+  nothing to send, because the API refuses a write that is not JSON and `HttpClient` only sets
+  the type when there is a body.
 - `core/api-error.interceptor.ts` is the only place HTTP errors are handled. On 401 `Unauthorized`
-  it calls `/api/auth/refresh` once and retries; if that fails it routes to `/admin/login` with a
-  return URL. Components see a typed `ApiError`, never an `HttpErrorResponse`.
+  it calls `/api/auth/refresh` once and retries; if that fails it forgets the signed-in admin and
+  routes to `/admin/login` with a return URL. Components see a typed `ApiError`, never an `HttpErrorResponse`.
+  Requests that fail together share one refresh, because the refresh token rotates on use. A call
+  marked `REDIRECT_TO_SIGN_IN: false` (the guard's `/me`) is refreshed but not redirected.
 - `core/auth/` holds a signal of the current admin, loaded from `/api/auth/me`, and an `adminGuard`
-  (`CanMatch`) on the `/admin` subtree except `login`.
+  (`CanMatch`) on the `/admin` subtree. Anything short of a confirmed session, an unreachable API
+  included, goes to sign-in. `/admin/login` is its own route, listed before it. The
+  guard builds the return URL from the URL it is matching; after sign-in only a path inside
+  `/admin` is followed (`safeReturnUrl`), so a crafted link cannot redirect off the site.
 
-**Editor.** A strictly typed reactive form (`FormGroup<ProjectForm>`). The markdown preview uses
-the same `core/markdown.ts` renderer, and its sanitising, as the public page, so the preview cannot
-differ from what is published. A 400's `details.errors` show next to the form; a 409 `SlugTaken`
-shows on the slug field.
+**Editor.** A strictly typed reactive form (`FormGroup<ProjectForm>`), with the mapping to and
+from the payload as pure functions in `project-form.ts`. The markdown preview uses the same
+`core/markdown.ts` renderer, and Angular's `[innerHTML]` sanitising, as the public page, so the
+preview cannot differ from what is published. A 400's `details.errors` show above the form; a 409
+`SlugTaken` shows on the slug field. The slug field is disabled while the project is published,
+saying why. Stack is one comma-separated field; an emptied link is sent as `null`, which removes
+it. A create moves from the `/new` route to `/:id`, which builds a new editor, so the saved project
+is handed over in navigation state rather than fetched again. A load for an id the editor has
+since left is ignored.
+Delete asks for a second click in the page rather than a browser `confirm()`.
 
-**Styling** uses the site's own tokens and shared classes in `styles.scss`, with no component
-library, so there is one styling approach and the admin adds little to the bundle.
+**Styling** uses the site's own tokens, with no component library. The admin's form and table
+classes live in `features/admin/admin.scss`, unencapsulated on the shell and the sign-in page, so
+they load with the lazy admin chunk and never reach a public page's stylesheet.
 
 Same rules as the rest of the app: standalone, signals, `OnPush`, `inject()`, inline SVG, no
 `ngModel`, no browser globals outside `afterNextRender`.

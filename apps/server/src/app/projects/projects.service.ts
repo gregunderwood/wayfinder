@@ -49,6 +49,10 @@ export class ProjectsService {
     return projects.map(toAdminProject);
   }
 
+  async findById(id: string): Promise<AdminProject> {
+    return toAdminProject(await this.requireProject(id));
+  }
+
   async create(payload: CreateProjectPayload): Promise<AdminProject> {
     await this.requireSlugAvailable(payload.slug);
     const project = this.projects.create({

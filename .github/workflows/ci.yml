@@ -89,6 +89,9 @@ jobs:
             echo "$headers" | grep -qi '^strict-transport-security:' || { echo "missing HSTS on $url"; exit 1; }
             if echo "$headers" | grep -qi '^x-powered-by:'; then echo "x-powered-by leaked on $url"; exit 1; fi
           done
+          curl -skI https://localhost/admin/login | grep -qi '^x-robots-tag: noindex' || { echo '/admin is missing X-Robots-Tag'; exit 1; }
+          if curl -skI https://localhost/work | grep -qi '^x-robots-tag:'; then echo 'a public page is marked noindex'; exit 1; fi
+          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Migrate, sign in and read the seeded projects, from the built image
         run: |

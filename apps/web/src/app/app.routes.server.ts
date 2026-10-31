@@ -13,6 +13,9 @@ export const serverRoutes: ServerRoute[] = [
   },
   { path: 'about', renderMode: RenderMode.Prerender },
   { path: 'resume', renderMode: RenderMode.Prerender },
+  // Signed-in pages: never prerendered, and nothing for a crawler to render.
+  { path: 'admin', renderMode: RenderMode.Client },
+  { path: 'admin/**', renderMode: RenderMode.Client },
   // Per request, because a prerendered page can only be served with a 200.
   { path: '**', renderMode: RenderMode.Server, status: 404 },
 ];

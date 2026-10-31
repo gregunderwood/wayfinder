@@ -3,7 +3,7 @@ import { CONFIG } from './config';
 const COMPOSE_PLUGIN_DIRECTORY = '/usr/local/lib/docker/cli-plugins';
 const COMPOSE_PLUGIN_PATH = `${COMPOSE_PLUGIN_DIRECTORY}/docker-compose`;
 
-// Prepares the machine only; the compose files, Caddyfile and images arrive with each deploy.
+// Prepares the machine only; the compose files, Caddy config and images arrive with each deploy.
 export function buildHostUserData(dataVolumeId: string): string[] {
   return [
     'set -euxo pipefail',

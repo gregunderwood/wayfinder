@@ -29,11 +29,14 @@ The uptime stack sits in us-east-1 because Route 53 publishes health check metri
 
 Merge to `main`. CI runs; if it passes, the **Deploy** workflow builds the web and API images
 (each skipped if that SHA already exists in ECR, since tags are immutable). It ships them with
-the compose files, Caddyfile and backup scripts from the same commit. The host reads the
-database password from SSM into a root-only `.env`, installs the backup timer, and waits for
-every container's healthcheck. The workflow then checks `/`, `/sitemap.xml`, a 404, the
-HTTP→HTTPS redirect and `/api/health` (`databaseReachable: true`) from outside, over the real
-certificate.
+the compose files, `caddy/Caddyfile` and backup scripts from the same commit. The host reads the
+secrets from SSM into a root-only `.env`, installs the backup timer, and waits for every
+container's healthcheck, then runs `caddy reload`. A reload validates the new Caddyfile and
+keeps serving the old config if it is invalid, which fails the deploy without dropping the site.
+Caddy mounts the `caddy/` directory rather than the file, because a single-file bind mount stays
+pinned to the copy a deploy replaces. The workflow then checks `/`, `/sitemap.xml`, a 404, the
+HTTP→HTTPS redirect, `X-Robots-Tag` on `/admin`, and `/api/health` (`databaseReachable: true`)
+from outside, over the real certificate.
 
 Both images share one tag, the git SHA. If they never become healthy, the host restores the
 previous tag for both and the workflow fails. The site keeps serving the old version. A deploy
