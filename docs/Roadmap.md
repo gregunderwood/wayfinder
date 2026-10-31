@@ -74,11 +74,12 @@ itself, and rolling back is one command.
 ## Phase 3 — CMS
 
 How each step is designed (tables, endpoints, cookies, render modes) is in [CMS.md](CMS.md);
-review a step against it.
+review a step against it. Open steps are GitHub issues in the
+[Phase 3 — CMS milestone](https://github.com/gregunderwood/wayfinder/milestone/1), and each closes from its PR.
 
 ### How this phase is built
 
-- **The plumbing ships first.** The API, Postgres, the data volume and backups (3.1 and 3.6)
+- **The plumbing ships first.** The API, Postgres, the data volume and backups (3.1)
   go to production before any table exists, so the pipeline is proven while there is nothing
   to lose.
 - **Then one PR per step, each deploying when it merges.** Every step is built and tested
@@ -109,29 +110,49 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
   redeploy. Home, About, Resume and Skills stay prerendered unless they start showing CMS data.
 - **Secrets never enter the repo or GitHub.** The database password and JWT signing keys are
   SSM SecureString parameters; the deploy script has the host read them into `.env`.
-- **Migrations are a deliberate step.** Deploys don't run them; they are run by hand on the host
-  (`migrate:show`, then `migrate:run`), and every migration must pass `run → revert → run` in
-  the server tests.
+- **Migrations run on deploy, with rollback (from 3.6).** Until then they are run by hand on the
+  host (`migrate:show`, then `migrate:run`). Either way, every migration must pass
+  `run → revert → run` in the server tests.
 
 ### Steps
 
-| Step   | What                                                                                                                                                                                          |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1 ✅ | **API + database locally:** Postgres and the Nest API in Compose, Caddy routes `/api`; config, TypeORM, migration CLI, `/api/health` reporting the database                                   |
-| 3.2 ✅ | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth                                  |
-| 3.3 ✅ | **Projects API:** public read-only endpoints (published only) and admin CRUD, validation, a seed from today's `projects.ts`                                                                   |
-| 3.4 ✅ | **Admin UI:** `/admin` login and Projects editor with markdown preview; client-only, `noindex`, excluded from prerender                                                                       |
-| 3.5    | **Public pages from the API:** project pages server-rendered per request; sitemap built from the database                                                                                     |
-| 3.6 ✅ | **Production infrastructure:** retained data volume, S3 backup bucket and nightly dump, SSM secrets, API image built and shipped by Deploy, migrations run by hand on the host; restore drill |
-| 3.7    | **Cutover:** Cypress suite for public vs admin routes, `docs/Deployment.md` updated, merge to `main`, migrate, create the admin user, verify live                                             |
+| Step   | What                                                                                                                                                                                                                                      |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1 ✅ | **Plumbing, local and production:** Postgres and the Nest API in Compose behind Caddy's `/api`; TypeORM and the migration CLI; `/api/health` reporting the database; retained data volume, nightly dump to S3, SSM secrets, restore drill |
+| 3.2 ✅ | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth                                                                              |
+| 3.3 ✅ | **Projects, API and admin:** public read-only endpoints (published only), admin CRUD, a seed from `projects.ts`; `/admin` sign-in and a Projects editor with markdown preview, client-only and `noindex`                                  |
+| 3.4    | **Admin shortcuts on the public site** ([#5](https://github.com/gregunderwood/wayfinder/issues/5)): a signed-in bar, "Edit this project" on project pages, a footer sign-in link when signed out                                          |
+| 3.5    | **Public pages from the API** ([#6](https://github.com/gregunderwood/wayfinder/issues/6)): project pages server-rendered per request; sitemap built from the database                                                                     |
+| 3.6    | **Cutover and button-up** ([#7](https://github.com/gregunderwood/wayfinder/issues/7)): migrations run automatically on deploy with rollback; an admin Cypress suite in CI; `docs/Deployment.md` reviewed; the "Done when" checked live    |
 
 **Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
 a deploy; and a deleted database can be restored from last night's backup.
 
+### Changed while building
+
+- **Steps were renumbered.** Production infrastructure shipped with 3.1 rather than as its own
+  step, and the admin UI with the Projects API in 3.3. Because every step deployed on merge,
+  the cutover's merge, migrate and create-admin already happened, so the last step became a
+  button-up.
+- **3.4 was added** once the admin existed: there was no way back to it from the public site.
+- **The seed is a data migration** generated from `projects.ts`, separate from the schema
+  migration, so reverting it removes only the seeded rows.
+- **A published project's slug cannot be renamed** (`SlugLocked`), because it is a public URL.
+- **The editor reads one project** from `GET /api/admin/projects/:id`, added during review,
+  rather than searching the admin list.
+- **`/admin` is not disallowed in `robots.txt`.** A crawler that may not fetch a page never sees
+  its `noindex`; the meta tag and Caddy's `X-Robots-Tag` do the job.
+- **Caddy mounts `caddy/` and deploys run `caddy reload`.** The single-file mount stayed pinned to
+  the old file, so Caddyfile changes had never reached production. A reload also refuses an
+  invalid config without dropping the site.
+- **Migrations will run on deploy.** They were planned as a permanent hand step; 3.6 automates
+  them now that each step deploys on merge.
+
 ### Deliberately not in Phase 3
 
-- **Two-factor sign-in.** Planned for after cutover; the design is in [CMS.md](CMS.md).
-- **A staging environment.** Today a merge to `main` goes straight to production, guarded by
+- **Two-factor sign-in** ([#9](https://github.com/gregunderwood/wayfinder/issues/9)). Planned for after cutover; the design is in
+  [CMS.md](CMS.md).
+- **A staging environment** ([#10](https://github.com/gregunderwood/wayfinder/issues/10)). Today a merge to `main` goes straight to production, guarded by
   CI, container healthchecks and automatic rollback. Later: deploy every merge to a staging
   host first, then promote that same image to production with an explicit approval (a GitHub
   environment with a required reviewer, or a manual "promote" workflow). Images are already

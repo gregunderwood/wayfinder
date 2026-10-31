@@ -33,7 +33,7 @@ hold only what is specific to that component. Dark mode is a token swap under
 Public: `/` · `/about` · `/work` · `/work/:slug` · `/blog` · `/blog/:slug` · `/blog/tag/:tag` ·
 `/testimonials` · `/contact` · `/resume`. Admin: `/admin/login`, then `/admin/*` behind
 `adminGuard`; all `RenderMode.Client`, `noindex` by meta tag and Caddy's `X-Robots-Tag`
-(not `robots.txt`, which would hide the `noindex`). The design is in [CMS.md § 3.4](CMS.md#34-admin-ui).
+(not `robots.txt`, which would hide the `noindex`). The design is in [CMS.md § 3.3 Admin UI](CMS.md#33-admin-ui).
 
 ### Rendering
 
