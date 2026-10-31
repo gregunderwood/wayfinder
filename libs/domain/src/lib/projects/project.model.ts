@@ -33,6 +33,9 @@ export interface Project {
   sortOrder: number;
 }
 
+/** A project as listed: everything but the body, which only its own page needs. */
+export type ProjectSummary = Omit<Project, 'bodyMarkdown'>;
+
 export interface AdminProject extends Project {
   id: string;
   status: ProjectStatus;

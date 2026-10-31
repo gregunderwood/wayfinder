@@ -1,12 +1,15 @@
-import { PROJECTS } from '../content/projects';
 import { buildSitemap, listSitemapPaths } from './sitemap';
 
 describe('sitemap', () => {
-  it('lists every project page, so publishing one cannot skip the sitemap', () => {
-    const paths = listSitemapPaths();
-    for (const project of PROJECTS) {
-      expect(paths).toContain(`/work/${project.slug}`);
-    }
+  it('lists the static pages and a page for every published project', () => {
+    expect(listSitemapPaths(['gateway', 'lvcc'])).toEqual([
+      '/',
+      '/work',
+      '/work/gateway',
+      '/work/lvcc',
+      '/about',
+      '/resume',
+    ]);
   });
 
   it('emits absolute URLs on the production origin', () => {

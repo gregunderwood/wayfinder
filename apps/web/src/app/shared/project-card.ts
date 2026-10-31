@@ -5,8 +5,8 @@ import {
   input,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { Project } from '@wayfinder/domain';
-import { PROJECT_KIND_LABELS } from '../content/projects';
+import type { ProjectSummary } from '@wayfinder/domain';
+import { PROJECT_KIND_LABELS } from './project-kind-labels';
 
 const CARD_STACK_LIMIT = 5;
 
@@ -57,7 +57,7 @@ const CARD_STACK_LIMIT = 5;
   `,
 })
 export class ProjectCard {
-  readonly project = input.required<Project>();
+  readonly project = input.required<ProjectSummary>();
   protected readonly visibleStack = computed(() =>
     this.project().stack.slice(0, CARD_STACK_LIMIT),
   );

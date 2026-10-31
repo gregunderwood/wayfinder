@@ -26,7 +26,7 @@ import {
 import { ADMIN_HOME_PATH } from '../../../core/auth/admin-paths';
 import { renderMarkdown } from '../../../core/markdown';
 import { SeoService } from '../../../core/seo.service';
-import { PROJECT_KIND_LABELS } from '../../../content/projects';
+import { PROJECT_KIND_LABELS } from '../../../shared/project-kind-labels';
 import { adminPageSeo } from '../admin-page';
 import { buildProjectForm, toFormValue, toPayload } from './project-form';
 

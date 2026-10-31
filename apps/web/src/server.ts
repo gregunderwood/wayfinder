@@ -7,7 +7,11 @@ import {
 import express from 'express';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ProjectSummary } from '@wayfinder/domain';
+import { INTERNAL_API_TIMEOUT_MS } from './app/core/internal-api.backend';
+import { RETRY_AFTER_SECONDS } from './app/core/page-data';
 import { buildSitemap, listSitemapPaths } from './app/core/sitemap';
+import { INTERNAL_API_URL_FROM_ENV } from './internal-api-url';
 
 const DEFAULT_PORT = 4000;
 
@@ -26,8 +30,16 @@ const angularApp = new AngularNodeAppEngine({
   ],
 });
 
-app.get('/sitemap.xml', (_request, response) => {
-  response.type('application/xml').send(buildSitemap(listSitemapPaths()));
+// A sitemap missing every project would tell search engines they are gone; 503 says come back.
+app.get('/sitemap.xml', async (_request, response) => {
+  try {
+    const slugs = await fetchPublishedSlugs();
+    response
+      .type('application/xml')
+      .send(buildSitemap(listSitemapPaths(slugs)));
+  } catch {
+    response.status(503).set('Retry-After', RETRY_AFTER_SECONDS).end();
+  }
 });
 
 app.use(
@@ -48,6 +60,17 @@ app.use('/**', (request, response, next) => {
     )
     .catch(next);
 });
+
+async function fetchPublishedSlugs(): Promise<string[]> {
+  const response = await fetch(`${INTERNAL_API_URL_FROM_ENV}/projects`, {
+    signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`The API answered ${response.status}`);
+  }
+  const projects = (await response.json()) as ProjectSummary[];
+  return projects.map((project) => project.slug);
+}
 
 if (isMainModule(import.meta.url)) {
   const port = process.env['PORT'] || DEFAULT_PORT;

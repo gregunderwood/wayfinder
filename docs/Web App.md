@@ -40,10 +40,14 @@ links to sign-in. Both are client-only, so prerendered HTML is the same for ever
 
 ### Rendering
 
-Every public route is prerendered at build time (`app.routes.server.ts`); `/work/:slug` takes its
-params from the content. Unknown paths render per request and answer a real **404** — the
-catch-all route sets `status: 404`, and an unknown project slug sets it through `RESPONSE_INIT`.
-`/sitemap.xml` is served by the Express host in `server.ts`, generated from the same content.
+`app.routes.server.ts` sets each route's mode. `/`, `/work` and `/work/:slug` show projects, so
+they render per request from the API; `/about` and `/resume` are prerendered at build time. Route
+resolvers load the data as a `PageData` and set the status through `RESPONSE_INIT`: an unknown
+project slug answers a real **404**, and the API unreachable a **503** with `Retry-After`. During
+SSR, `InternalApiBackend` sends `/api` calls straight to the API container, and the transfer cache
+hands the responses to the browser. Unknown paths answer 404 through the catch-all route.
+`/sitemap.xml` is served by the Express host in `server.ts`, built from `GET /api/projects`. The
+design is in [CMS.md § 3.5](CMS.md#35-public-pages-from-the-api).
 
 The SSR host only renders for hosts in `security.allowedHosts` (`project.json`); any other `Host`
 header gets a 400 (Angular's SSRF guard). Override per environment with `NG_ALLOWED_HOSTS`.

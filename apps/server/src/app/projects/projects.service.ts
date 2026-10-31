@@ -11,6 +11,7 @@ import {
   type CreateProjectPayload,
   type Project,
   ProjectStatus,
+  type ProjectSummary,
   type UpdateProjectPayload,
 } from '@wayfinder/domain';
 import {
@@ -30,11 +31,11 @@ export class ProjectsService {
     private readonly clock: Clock,
   ) {}
 
-  async listPublished(): Promise<Project[]> {
+  async listPublished(): Promise<ProjectSummary[]> {
     const published = await this.inDisplayOrder(
       this.publishedQuery(),
     ).getMany();
-    return published.map(toProject);
+    return published.map(toProjectSummary);
   }
 
   async findPublished(slug: string): Promise<Project> {
@@ -201,7 +202,7 @@ function projectNotFound(): NotFoundException {
   });
 }
 
-function toProject(project: ProjectEntity): Project {
+function toProjectSummary(project: ProjectEntity): ProjectSummary {
   return {
     slug: project.slug,
     name: project.name,
@@ -210,13 +211,16 @@ function toProject(project: ProjectEntity): Project {
     role: project.role,
     period: project.period,
     stack: project.stack,
-    bodyMarkdown: project.bodyMarkdown,
     ...(project.liveUrl && { liveUrl: project.liveUrl }),
     ...(project.repoUrl && { repoUrl: project.repoUrl }),
     ...(project.docsUrl && { docsUrl: project.docsUrl }),
     featured: project.featured,
     sortOrder: project.sortOrder,
   };
+}
+
+function toProject(project: ProjectEntity): Project {
+  return { ...toProjectSummary(project), bodyMarkdown: project.bodyMarkdown };
 }
 
 function toAdminProject(project: ProjectEntity): AdminProject {

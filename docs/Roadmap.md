@@ -7,16 +7,16 @@ database-free, Phase 2 deploys it, and the CMS arrives underneath a site that is
 
 ## Status
 
-| Phase | Outcome                                                                                                            | State                                  |
-| ----- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done**                               |
-| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done**                               |
-| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done**                               |
-| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | **In progress** (branch `phase-3-cms`) |
-| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |                                        |
-| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |                                        |
-| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |                                        |
-| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |                                        |
+| Phase | Outcome                                                                                                            | State                      |
+| ----- | ------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| 0     | Nx workspace, `libs/domain`, lint boundaries, Prettier, CI, AGENTS.md + docs                                       | **Done**                   |
+| 1     | **Publishable.** Public shell, Home/About/Resume/Skills, SSR + prerender, SEO, a11y. Content hardcoded in TS       | **Done**                   |
+| 2     | **Live on AWS.** Account foundation, infrastructure as code, container, CI/CD, DNS + TLS                           | **Done**                   |
+| 3     | Postgres + TypeORM + migrate CLI; auth + admin shell; Projects end to end                                          | **In progress** (3.6 left) |
+| 4     | Blog: posts, tags, drafts/scheduling, markdown editor with preview, RSS                                            |                            |
+| 5     | Testimonials (submission → moderation) + contact form + email (SES)                                                |                            |
+| 6     | Media uploads to S3, OG image generation, Lighthouse + a11y budget, analytics                                      |                            |
+| 7     | **Starter.** Extract a reusable "your site on your AWS" template: one config file, a setup script, example content |                            |
 
 Deployment moved up from last to Phase 2: a repo that is public and on a résumé should point at a
 live site, and a static, database-free site is the simplest thing this project will ever deploy.
@@ -107,7 +107,8 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
 - **Pages that show CMS data render on request; the rest stay prerendered.** CI has no
   database, so project pages (and anything listing projects) are server-rendered per request
   from the API. Visitors and crawlers still get full HTML, and an admin edit is live without a
-  redeploy. Home, About, Resume and Skills stay prerendered unless they start showing CMS data.
+  redeploy. Home renders per request because it lists featured projects; About and Resume stay
+  prerendered.
 - **Secrets never enter the repo or GitHub.** The database password and JWT signing keys are
   SSM SecureString parameters; the deploy script has the host read them into `.env`.
 - **Migrations run on deploy, with rollback (from 3.6).** Until then they are run by hand on the
@@ -122,7 +123,7 @@ secrets ──► SSM Parameter Store (SecureString), read by the host at deploy
 | 3.2 ✅ | **Auth:** `create-admin` CLI, argon2id, JWT in httpOnly cookies with refresh rotation, encrypted sensitive columns, rate-limited login; 90% coverage on auth                                                                              |
 | 3.3 ✅ | **Projects, API and admin:** public read-only endpoints (published only), admin CRUD, a seed from `projects.ts`; `/admin` sign-in and a Projects editor with markdown preview, client-only and `noindex`                                  |
 | 3.4 ✅ | **Admin shortcuts on the public site** ([#5](https://github.com/gregunderwood/wayfinder/issues/5)): a signed-in bar, "Edit this project" on project pages, a footer sign-in link when signed out                                          |
-| 3.5    | **Public pages from the API** ([#6](https://github.com/gregunderwood/wayfinder/issues/6)): project pages server-rendered per request; sitemap built from the database                                                                     |
+| 3.5 ✅ | **Public pages from the API** ([#6](https://github.com/gregunderwood/wayfinder/issues/6)): project pages server-rendered per request; sitemap built from the database                                                                     |
 | 3.6    | **Cutover and button-up** ([#7](https://github.com/gregunderwood/wayfinder/issues/7)): migrations run automatically on deploy with rollback; an admin Cypress suite in CI; `docs/Deployment.md` reviewed; the "Done when" checked live    |
 
 **Done when:** Greg can sign in at `/admin`, edit a project, and see it on the live site without
@@ -145,6 +146,12 @@ a deploy; and a deleted database can be restored from last night's backup.
 - **Caddy mounts `caddy/` and deploys run `caddy reload`.** The single-file mount stayed pinned to
   the old file, so Caddyfile changes had never reached production. A reload also refuses an
   invalid config without dropping the site.
+- **Lists return a `ProjectSummary`**, a project without its body, since no list shows one.
+- **The home page degrades rather than answering 503** when the API is down: it drops "Selected
+  work" and keeps the rest. Project pages and the sitemap answer 503.
+- **No `Cache-Control` on server-rendered pages.** With no shared cache in front of the site, it
+  would only show the admin stale pages after an edit.
+- **The web healthcheck fetches `/about`**, a prerendered page, so an API outage does not fail it.
 - **Migrations will run on deploy.** They were planned as a permanent hand step; 3.6 automates
   them now that each step deploys on merge.
 
@@ -198,7 +205,7 @@ than early sales.
   Namecheap pointed at its nameservers (step 2.6).
 - **Sign In Solutions end date and title.** The résumé shows "Feb 2019 – 2026" and "Senior
   Full-Stack Software Engineer" — both to confirm in `apps/web/src/app/content/experience.ts`.
-  Gateway's period ("2025") is also a placeholder in `projects.ts`.
+  Gateway's period ("2025") is also a placeholder, now edited in `/admin`.
 - **GitHub and LinkedIn links**, and an Open Graph share image (Phase 6).
 
 ## When to update this file

@@ -1,16 +1,10 @@
 import { RenderMode, ServerRoute } from '@angular/ssr';
-import { PROJECTS } from './content/projects';
 
 export const serverRoutes: ServerRoute[] = [
-  { path: '', renderMode: RenderMode.Prerender },
-  { path: 'work', renderMode: RenderMode.Prerender },
-  {
-    path: 'work/:slug',
-    renderMode: RenderMode.Prerender,
-    async getPrerenderParams(): Promise<Record<string, string>[]> {
-      return PROJECTS.map((project) => ({ slug: project.slug }));
-    },
-  },
+  // Pages showing projects render per request, so an edit is live without a deploy.
+  { path: '', renderMode: RenderMode.Server },
+  { path: 'work', renderMode: RenderMode.Server },
+  { path: 'work/:slug', renderMode: RenderMode.Server },
   { path: 'about', renderMode: RenderMode.Prerender },
   { path: 'resume', renderMode: RenderMode.Prerender },
   // Signed-in pages: never prerendered, and nothing for a crawler to render.

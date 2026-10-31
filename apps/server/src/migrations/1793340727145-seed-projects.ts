@@ -1,6 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-// Generated once from apps/web/src/app/content/projects.ts, which the API cannot import.
+// Generated once from the projects the site hardcoded before the CMS, which the API could not import.
 const SEEDED_PROJECTS = [
   {
     slug: 'gateway',

@@ -68,7 +68,23 @@ jobs:
       - name: Start the stack behind Caddy
         run: docker compose up -d --wait --wait-timeout 120
 
-      - name: Smoke test
+      - name: Migrate, sign in and read the seeded projects, from the built image
+        run: |
+          docker compose exec -T api node main.js migrate:run
+          echo 'ci-only-admin-password' | docker compose exec -T api node main.js create-admin --email admin@example.com
+          jar=$(mktemp)
+          sign_in() {
+            curl -sk -o /dev/null -w '%{http_code}' -c "$jar" -H 'Content-Type: application/json' \
+              -d "{\"email\":\"admin@example.com\",\"password\":\"$1\"}" https://localhost/api/auth/login
+          }
+          [ "$(sign_in not-the-password)" = 401 ] || { echo 'a wrong password was accepted'; exit 1; }
+          [ "$(sign_in ci-only-admin-password)" = 204 ] || { echo 'sign-in failed'; exit 1; }
+          curl -sk -b "$jar" https://localhost/api/auth/me | jq -e '.email == "admin@example.com"' >/dev/null || { echo 'no session after sign-in'; exit 1; }
+          seeded='["gateway","lvcc","tempestas","wayfinder"]'
+          curl -sk https://localhost/api/projects | jq -e "map(.slug) == $seeded" >/dev/null || { echo 'the seeded projects are not public'; exit 1; }
+          curl -sk -b "$jar" https://localhost/api/admin/projects | jq -e 'length == 4 and all(.status == "published")' >/dev/null || { echo 'the admin cannot list projects'; exit 1; }
+
+      - name: Smoke test, with the seeded projects served from the database
         run: |
           expect() {
             code=$(curl -sk -o /dev/null -w '%{http_code}' "$2")
@@ -76,7 +92,11 @@ jobs:
             [ "$code" = "$1" ] || { echo "expected $1"; exit 1; }
           }
           expect 200 https://localhost/
+          expect 200 https://localhost/work
           expect 200 https://localhost/work/gateway
+          expect 404 https://localhost/work/no-such-project
+          curl -sk https://localhost/work/gateway | grep -q '>Gateway</h1>' || { echo 'the project page did not render from the API'; exit 1; }
+          curl -sk https://localhost/sitemap.xml | grep -q '/work/wayfinder</loc>' || { echo 'the sitemap lacks the seeded projects'; exit 1; }
           expect 200 https://localhost/sitemap.xml
           expect 404 https://localhost/no-such-page
           expect 308 http://localhost/
@@ -93,21 +113,21 @@ jobs:
           if curl -skI https://localhost/work | grep -qi '^x-robots-tag:'; then echo 'a public page is marked noindex'; exit 1; fi
           docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
-      - name: Migrate, sign in and read the seeded projects, from the built image
+      - name: With the API down, project pages answer 503 and the rest still serve
         run: |
-          docker compose exec -T api node main.js migrate:run
-          echo 'ci-only-admin-password' | docker compose exec -T api node main.js create-admin --email admin@example.com
-          jar=$(mktemp)
-          sign_in() {
-            curl -sk -o /dev/null -w '%{http_code}' -c "$jar" -H 'Content-Type: application/json' \
-              -d "{\"email\":\"admin@example.com\",\"password\":\"$1\"}" https://localhost/api/auth/login
+          docker compose stop api
+          expect() {
+            code=$(curl -sk -o /dev/null -w '%{http_code}' "$2")
+            echo "$code $2"
+            [ "$code" = "$1" ] || { echo "expected $1"; exit 1; }
           }
-          [ "$(sign_in not-the-password)" = 401 ] || { echo 'a wrong password was accepted'; exit 1; }
-          [ "$(sign_in ci-only-admin-password)" = 204 ] || { echo 'sign-in failed'; exit 1; }
-          curl -sk -b "$jar" https://localhost/api/auth/me | jq -e '.email == "admin@example.com"' >/dev/null || { echo 'no session after sign-in'; exit 1; }
-          seeded='["gateway","lvcc","tempestas","wayfinder"]'
-          curl -sk https://localhost/api/projects | jq -e "map(.slug) == $seeded" >/dev/null || { echo 'the seeded projects are not public'; exit 1; }
-          curl -sk -b "$jar" https://localhost/api/admin/projects | jq -e 'length == 4 and all(.status == "published")' >/dev/null || { echo 'the admin cannot list projects'; exit 1; }
+          expect 503 https://localhost/work/gateway
+          expect 503 https://localhost/work
+          expect 503 https://localhost/sitemap.xml
+          expect 200 https://localhost/
+          expect 200 https://localhost/about
+          curl -skI https://localhost/work/gateway | grep -qi '^retry-after:' || { echo 'a 503 without Retry-After'; exit 1; }
+          docker compose start api
 
       - name: Logs on failure
         if: failure()

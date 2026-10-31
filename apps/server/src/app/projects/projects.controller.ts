@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import type { Project } from '@wayfinder/domain';
+import type { Project, ProjectSummary } from '@wayfinder/domain';
 import { ProjectsService } from './projects.service';
 
 @Controller('projects')
@@ -7,7 +7,7 @@ export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}
 
   @Get()
-  list(): Promise<Project[]> {
+  list(): Promise<ProjectSummary[]> {
     return this.projects.listPublished();
   }
 

@@ -11,7 +11,7 @@ part is meant to work, so a step can be reviewed against what it set out to do. 
 written before the step that builds it; when the code and this file disagree, either the code is
 wrong or this file is out of date, and the review settles which.
 
-Status: **3.1–3.4 built.** Section 3.5 is the agreed design, not yet code; 3.6 is designed in its GitHub issue. Anything listed
+Status: **3.1–3.5 built.** 3.6 is designed in its GitHub issue. Anything listed
 under [Open questions](#open-questions) is undecided; a step does not settle one silently.
 
 ## Key files
@@ -35,6 +35,8 @@ Built:
 
 - [../apps/web/src/app/core/api.service.ts](../apps/web/src/app/core/api.service.ts) — the only caller of `HttpClient`
 - [../apps/web/src/app/core/api-error.interceptor.ts](../apps/web/src/app/core/api-error.interceptor.ts) and [api-request-error.ts](../apps/web/src/app/core/api-request-error.ts) — the one place HTTP errors are handled, and the `ApiRequestError` components see
+- [../apps/web/src/app/core/internal-api.backend.ts](../apps/web/src/app/core/internal-api.backend.ts) — sends SSR's `/api` calls to the API container
+- [../apps/web/src/app/core/page-data.ts](../apps/web/src/app/core/page-data.ts) and [features/work/project-resolvers.ts](../apps/web/src/app/features/work/project-resolvers.ts) — page data and its status codes
 - [../apps/web/src/app/core/auth/](../apps/web/src/app/core/auth/) — `AdminSession`, `adminGuard`, `SessionRefresher`, `admin-paths.ts` (`safeReturnUrl`)
 - [../apps/web/src/app/features/admin/](../apps/web/src/app/features/admin/) — `login`, `admin-shell`, `projects/` (list, editor, `project-form.ts`)
 
@@ -220,8 +222,8 @@ reviewed path. The server cannot import `apps/web/.../content/projects.ts` (apps
 other), so a one-off script generated the migration from that file, and was checked against it
 field by field; the generated migration is what is committed and reviewed, and the script is not
 kept. The rows are inserted as published, with parameters rather than quoted SQL. Reverting it
-deletes those four slugs and nothing else. From here on the database is the source of truth;
-`projects.ts` stays only until 3.5 moves the public pages to the API.
+deletes those four slugs and nothing else. The database is the source of truth, and
+`projects.ts` was deleted in 3.5.
 
 **Tests.** Every rule above is tested against real Postgres (see
 [Testing](Testing.md#the-test-database)), so the unique index and the published filter are
@@ -313,32 +315,55 @@ signed in.
 
 ### 3.5 Public pages from the API
 
-**Render modes.** `/`, `/work` and `/work/:slug` show projects, so they move from `Prerender` to
-`Server`. `/about` and `/resume` stay prerendered. The `getPrerenderParams` reading
-`content/projects.ts` goes, and `content/projects.ts` is deleted once nothing imports it; the
-`PROJECT_KIND_LABELS` it holds move to a component-level constant.
+**Render modes.** `/`, `/work` and `/work/:slug` show projects, so they render per request
+(`RenderMode.Server`). `/about` and `/resume` stay prerendered. `content/projects.ts` is gone;
+`PROJECT_KIND_LABELS` moved to `shared/project-kind-labels.ts`.
 
-**Fetching.** The browser calls `/api`. During SSR, a server-only interceptor rewrites `/api/...`
-to `API_INTERNAL_URL` (`http://api:3000/api` in Compose), so the render does not loop out through
-Caddy and TLS. Angular's HTTP transfer cache, on by default with hydration, hands the server's
-responses to the browser, so a page load makes no second API call.
+**Shapes.** `GET /api/projects` returns `ProjectSummary[]`, a `Project` without `bodyMarkdown`,
+because a list never shows the body. `GET /api/projects/:slug` returns the full `Project`.
 
-**Status codes.**
+**Fetching.** Route resolvers (`features/work/project-resolvers.ts`) load the data, and
+`withComponentInputBinding` hands it to the page as an input. The browser calls `/api`. During
+SSR, a server-only `HttpBackend` (`core/internal-api.backend.ts`) sends `/api/...` to
+`API_INTERNAL_URL` (`http://api:3000/api` in Compose), so the render does not loop out through
+Caddy and TLS.
 
-- An unknown or draft slug answers a real 404 through `RESPONSE_INIT`, as today.
-- **The API unreachable answers 503 with `Retry-After`, never a 404.** A 404 tells search engines
-  the page is gone; a 503 tells them to come back.
-- `/about` and `/resume` are unaffected by an API outage.
+- **It is a backend, not an interceptor.** Angular's HTTP transfer cache keys each response by
+  the URL the app asked for. An interceptor runs before the cache and would key it by the internal
+  URL, so the browser would miss and fetch again. Below the cache, the browser finds the server's
+  responses and a full page load makes no API call.
+- **It matches absolute same-origin URLs too.** Platform-server turns `/api/...` into
+  `https://<page origin>/api/...` before the backend sees it.
+- **It forwards the visitor's address as `X-Forwarded-For`**, so the API's rate limits count
+  visitors rather than the web container.
+- **It gives up after 5 seconds**, so a hung API turns into a 503 rather than a render that never
+  finishes. The sitemap uses the same limit.
+- **A failure travels with the page.** The transfer cache keeps only successful responses, so
+  `loadContent` puts a 404 or an outage in `TransferState`. The browser shows what the server
+  rendered instead of asking again, and cannot hydrate different content over it.
 
-**Caching.** Server-rendered pages send `Cache-Control: public, max-age=60,
-stale-while-revalidate=600`, so an edit is visible within a minute and a burst of visitors does
-not mean a burst of queries.
+**Status codes.** Each resolver returns a `PageData<T>`: `ready`, `not-found` or `unavailable`
+(`core/page-data.ts`), and sets the status through `RESPONSE_INIT` as it does.
+
+- An unknown or draft slug answers a real 404.
+- **The API unreachable answers 503 with `Retry-After: 60`, never a 404.** A 404 tells search
+  engines the page is gone; a 503 tells them to come back. The page says it is unavailable and is
+  `noindex`.
+- **The home page degrades instead.** Without the API it answers 200 and leaves out "Selected
+  work", because the rest of the page does not depend on projects.
+- `/about` and `/resume` are unaffected by an API outage, and the web container's healthcheck
+  fetches `/about`, so an API outage does not mark the web container unhealthy.
+
+**Caching.** No `Cache-Control` header is added. The design proposed `max-age=60` with
+`stale-while-revalidate`, but nothing shared sits in front of the site to absorb a burst, so the
+header would only show the admin a stale page after an edit. Revisit if a CDN is added.
 
 **Sitemap.** `server.ts` builds `/sitemap.xml` from `GET /api/projects` plus the static paths. If
 the API is down, it answers 503 rather than a sitemap missing every project.
 
-**Review check.** For each project, the server-rendered page's title, description, canonical, Open
-Graph tags and JSON-LD must match what the prerendered page on `main` produces today.
+**Verified.** For each page, the server-rendered title, description, canonical, Open Graph tags
+and JSON-LD matched the prerendered page on `main`. Lighthouse scores were the same or better,
+and CI's container job checks the 404, the 503s and the seeded projects against a real stack.
 
 ## Patterns to follow
 

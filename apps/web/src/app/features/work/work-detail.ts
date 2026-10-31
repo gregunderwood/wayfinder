@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  RESPONSE_INIT,
   computed,
   effect,
   inject,
@@ -10,10 +9,11 @@ import {
 import { RouterLink } from '@angular/router';
 import type { Project } from '@wayfinder/domain';
 import { AdminSession } from '../../core/auth/admin-session';
-import { PROJECT_KIND_LABELS, findProject } from '../../content/projects';
 import { renderMarkdown } from '../../core/markdown';
+import type { PageData } from '../../core/page-data';
 import { SeoService } from '../../core/seo.service';
 import { buildProjectJsonLd } from '../../core/structured-data';
+import { PROJECT_KIND_LABELS } from '../../shared/project-kind-labels';
 import { EditProjectLink } from '../admin/shortcuts/edit-project-link';
 
 @Component({
@@ -75,6 +75,14 @@ import { EditProjectLink } from '../admin/shortcuts/edit-project-link';
           <div class="prose" [innerHTML]="body()"></div>
         </div>
       </article>
+    } @else if (page().status === 'unavailable') {
+      <section class="page-head wrap">
+        <h1>This page is unavailable</h1>
+        <p class="lead">
+          The project could not be loaded just now. Try again in a minute, or
+          <a routerLink="/work">see all work</a>.
+        </p>
+      </section>
     } @else {
       <section class="page-head wrap">
         <h1>No such project</h1>
@@ -114,8 +122,13 @@ import { EditProjectLink } from '../admin/shortcuts/edit-project-link';
 export class WorkDetail {
   /** Bound from the :slug route parameter by withComponentInputBinding. */
   readonly slug = input.required<string>();
+  /** Bound from the route's resolver. */
+  readonly page = input.required<PageData<Project>>();
 
-  protected readonly project = computed(() => findProject(this.slug()));
+  protected readonly project = computed(() => {
+    const page = this.page();
+    return page.status === 'ready' ? page.content : undefined;
+  });
   protected readonly body = computed(() => {
     const project = this.project();
     return project ? renderMarkdown(project.bodyMarkdown) : '';
@@ -124,7 +137,6 @@ export class WorkDetail {
 
   protected readonly session = inject(AdminSession);
   private readonly seo = inject(SeoService);
-  private readonly responseInit = inject(RESPONSE_INIT, { optional: true });
 
   constructor() {
     effect(() => {
@@ -132,7 +144,7 @@ export class WorkDetail {
       if (project) {
         this.describeProject(project);
       } else {
-        this.answerNotFound();
+        this.describeMissingPage();
       }
     });
   }
@@ -147,11 +159,13 @@ export class WorkDetail {
     });
   }
 
-  private answerNotFound(): void {
-    if (this.responseInit) this.responseInit.status = 404;
+  private describeMissingPage(): void {
+    const isUnavailable = this.page().status === 'unavailable';
     this.seo.set({
-      title: 'Not found',
-      description: 'This project does not exist.',
+      title: isUnavailable ? 'Unavailable' : 'Not found',
+      description: isUnavailable
+        ? 'This project could not be loaded just now.'
+        : 'This project does not exist.',
       path: `/work/${this.slug()}`,
       noindex: true,
     });

@@ -1,11 +1,10 @@
-import { PROJECTS } from '../content/projects';
 import { absoluteUrl } from './site.config';
 
-export function listSitemapPaths(): string[] {
+export function listSitemapPaths(projectSlugs: string[]): string[] {
   return [
     '/',
     '/work',
-    ...PROJECTS.map((project) => `/work/${project.slug}`),
+    ...projectSlugs.map((slug) => `/work/${slug}`),
     '/about',
     '/resume',
   ];
