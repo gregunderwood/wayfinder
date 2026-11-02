@@ -34,16 +34,22 @@ main() {
 
 # Only the new image knows the `down` of the migrations it brought, so it reverts them.
 revert_migrations_since() {
-  local migrations_to_revert reverted_migrations
-  migrations_to_revert=$(($(count_applied_migrations) - $1))
+  local applied_migrations migrations_to_revert reverted_migrations reverted_count=0
+  if ! applied_migrations=$(count_applied_migrations); then
+    echo "ROLLBACK INCOMPLETE: could not read which migrations are applied." \
+      "The restore point is the backup labelled $backup_label."
+    return
+  fi
+  migrations_to_revert=$((applied_migrations - $1))
   [ "$migrations_to_revert" -gt 0 ] || return 0
-  reverted_migrations=$(newest_migrations "$migrations_to_revert")
+  reverted_migrations=$(newest_migrations "$migrations_to_revert") || reverted_migrations='names unavailable'
   for _ in $(seq 1 "$migrations_to_revert"); do
     if ! run_in_new_api migrate:revert; then
-      echo "ROLLBACK INCOMPLETE: a revert failed with $(($(count_applied_migrations) - $1)) of" \
+      echo "ROLLBACK INCOMPLETE: a revert failed with $((migrations_to_revert - reverted_count)) of" \
         "[${reverted_migrations//$'\n'/, }] still applied. The restore point is the backup labelled $backup_label."
       return
     fi
+    reverted_count=$((reverted_count + 1))
   done
   echo "Rolled back: reverted migrations [${reverted_migrations//$'\n'/, }]"
 }
@@ -63,7 +69,9 @@ run_in_new_api() {
 }
 
 count_applied_migrations() {
-  if [ -z "$(query_database "SELECT to_regclass('public.migrations')")" ]; then
+  local migrations_table
+  migrations_table=$(query_database "SELECT to_regclass('public.migrations')") || return 1
+  if [ -z "$migrations_table" ]; then
     echo 0
   else
     query_database 'SELECT count(*) FROM migrations'

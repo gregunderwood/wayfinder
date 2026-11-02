@@ -156,22 +156,29 @@ jobs:
         run: |
           api_container=$(docker compose ps -q api)
           docker compose exec -T postgres psql -U wayfinder -d wayfinder -c 'CREATE TABLE ci_rollback_probe (id integer)'
-          if API_IMAGE=$BROKEN_API_IMAGE deploy/host/release.sh ci-failed-migration; then echo 'the release went ahead'; exit 1; fi
-          [ "$(docker compose ps -q api)" = "$api_container" ] || { echo 'the API was replaced'; exit 1; }
-          if docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc 'SELECT name FROM migrations' | grep -q CiRollbackProbe; then
-            echo 'the failed migration was recorded'; exit 1
+          if API_IMAGE=$BROKEN_API_IMAGE deploy/host/release.sh ci-failed-migration >"$RUNNER_TEMP/release.log" 2>&1; then
+            cat "$RUNNER_TEMP/release.log"; echo 'the release went ahead'; exit 1
           fi
+          cat "$RUNNER_TEMP/release.log"
+          [ "$(docker compose ps -q api)" = "$api_container" ] || { echo 'the API was replaced'; exit 1; }
+          grep -q 'Rolled back: reverted migrations \[CiEarlierProbe9999999999998\]' "$RUNNER_TEMP/release.log" || { echo 'it did not revert the migration applied before the failure'; exit 1; }
+          if docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc 'SELECT name FROM migrations' | grep -q Probe; then
+            echo 'a probe migration is still recorded'; exit 1
+          fi
+          [ -z "$(docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc "SELECT to_regclass('ci_earlier_probe')")" ] || { echo 'the earlier migration was not reverted'; exit 1; }
           [ "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/work/gateway)" = 200 ] || { echo 'the site stopped serving'; exit 1; }
           docker compose exec -T postgres psql -U wayfinder -d wayfinder -c 'DROP TABLE ci_rollback_probe'
 
-      - name: A release that migrates and never becomes healthy reverts its migration and images
+      - name: A release that migrates and never becomes healthy reverts its migrations and images
         run: |
           if API_IMAGE=$BROKEN_API_IMAGE deploy/host/release.sh ci-unhealthy "$WEB_IMAGE" "$API_IMAGE" >"$RUNNER_TEMP/release.log" 2>&1; then
             cat "$RUNNER_TEMP/release.log"; echo 'the release went ahead'; exit 1
           fi
           cat "$RUNNER_TEMP/release.log"
-          grep -q 'Rolled back: reverted migrations \[CiRollbackProbe9999999999999\]' "$RUNNER_TEMP/release.log" || { echo 'it did not say what it reverted'; exit 1; }
-          [ -z "$(docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc "SELECT to_regclass('ci_rollback_probe')")" ] || { echo 'the migration was not reverted'; exit 1; }
+          grep -q 'Rolled back: reverted migrations \[CiRollbackProbe9999999999999, CiEarlierProbe9999999999998\]' "$RUNNER_TEMP/release.log" || { echo 'it did not say what it reverted'; exit 1; }
+          for table in ci_rollback_probe ci_earlier_probe; do
+            [ -z "$(docker compose exec -T postgres psql -U wayfinder -d wayfinder -tAc "SELECT to_regclass('$table')")" ] || { echo "$table was not reverted"; exit 1; }
+          done
           [ "$(docker inspect --format '{{.Config.Image}}' "$(docker compose ps -q api)")" = "$API_IMAGE" ] || { echo 'the previous API image was not restored'; exit 1; }
           [ "$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/work/gateway)" = 200 ] || { echo 'the site is not serving'; exit 1; }
 
