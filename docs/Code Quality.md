@@ -159,6 +159,24 @@ collection: `projects.map((project) => project.slug)`, not `projects.map((p) => 
 - DB columns are `snake_case` in SQL and `camelCase` in the entity, mapped with explicit
   `@Column({ name: 'published_at' })`. uuid primary keys, `timestamptz` only, named indexes.
 
+### Migrations
+
+#### ✅ Expand, then contract
+
+A deploy migrates before it switches containers, and a failed deploy can put the previous images
+back on the new schema. So every migration must leave a schema the release before it still works
+with: add a column, table or index in one release, start using it, and remove the old one in a
+later release. A rename is an add, a copy and, a release later, a drop.
+
+#### ✅ Every migration has a `down` that undoes it
+
+A failed deploy reverts the migrations it applied, with the new image. A `down` that cannot undo
+its data change says so in the PR, and the pre-deploy backup is the way back.
+
+#### ❌ Never `synchronize: true`
+
+It changes the production schema on boot, unreviewed and with no `down`.
+
 ### Logging
 
 Use `new Logger(Class.name)`, never `console.log`. Log on change, not per request.

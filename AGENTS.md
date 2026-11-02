@@ -25,6 +25,7 @@ npx nx serve server                   # NestJS API
 npx nx run-many -t lint,test,build    # the gate
 npx nx test server --coverage         # also the gate: thresholds are checked ONLY here
 npx nx e2e web-e2e                    # Cypress
+npx cypress run --project apps/web-e2e --config-file cypress.stack.config.ts  # admin + public, against the compose stack
 npx prettier --write .                # format
 npx nx run infra:synth                # synthesize the AWS stacks + cdk-nag checks
 docker compose up -d --build --wait   # full local stack at https://localhost (cp .env.example .env first)

@@ -19,7 +19,7 @@ echo "Deploying $IMAGE_TAG to $instance ($public_ip)"
 release_bundle=$(tar czf - docker-compose.yml docker-compose.production.yml \
   caddy deploy/host | base64 -w0)
 
-# A failed rollout restores the previous tag, whose images are still local
+# A failed release restores the previous tag, whose images are still local
 # because pruning runs only after success.
 remote=$(cat <<SCRIPT
 set -euo pipefail
@@ -60,15 +60,15 @@ install_backups() {
 
 echo '$release_bundle' | base64 -d | tar xzf -
 install_backups
+previous_images=()
+if [ -n "\$previous_tag" ] && [ "\$previous_tag" != '$IMAGE_TAG' ]; then
+  previous_images=("$REGISTRY/wayfinder/web:\$previous_tag" "$REGISTRY/wayfinder/api:\$previous_tag")
+fi
 write_env '$IMAGE_TAG'
 docker compose pull --quiet
-if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans; then
-  docker compose logs --tail 50 || true
-  if [ -n "\$previous_tag" ] && [ "\$previous_tag" != '$IMAGE_TAG' ]; then
-    echo "The new images never became healthy; rolling back to \$previous_tag"
-    write_env "\$previous_tag"
-    docker compose up -d --wait --wait-timeout 180 --remove-orphans
-  fi
+if ! BACKUP_BUCKET='$BACKUP_BUCKET' AWS_REGION='$AWS_REGION' \
+  host/release.sh "pre-deploy-$IMAGE_TAG" "\${previous_images[@]}"; then
+  [ \${#previous_images[@]} -eq 0 ] || write_env "\$previous_tag"
   exit 1
 fi
 # A reload validates the new Caddyfile first and keeps serving the old one if it is invalid.

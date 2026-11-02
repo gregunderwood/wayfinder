@@ -10,10 +10,11 @@ app_directory=${APP_DIRECTORY:-/opt/wayfinder}
 download_file=$(mktemp "${DATA_DIRECTORY:-/var/lib/wayfinder}/restore-XXXXXX.dump")
 trap 'rm -f "$download_file"' EXIT
 
+# A pre-deploy backup is restored by its key: after a lost volume, the newest one is of an empty database.
 if [ "$requested_backup" = latest ]; then
   backup_key=$(aws s3api list-objects-v2 --region "$AWS_REGION" \
     --bucket "$BACKUP_BUCKET" --prefix postgres/ \
-    --query 'sort_by(Contents, &Key)[-1].Key' --output text)
+    --query "sort_by(Contents[?!contains(Key, '-pre-deploy-')], &Key)[-1].Key" --output text)
 else
   backup_key=$requested_backup
 fi

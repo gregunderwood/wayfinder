@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Runs on the web host from wayfinder-backup.timer. Needs BACKUP_BUCKET and AWS_REGION.
+# Usage: backup-database.sh [label]: nightly from wayfinder-backup.timer, or labelled before a release.
+# Needs BACKUP_BUCKET and AWS_REGION.
 set -euo pipefail
 : "${BACKUP_BUCKET:?}" "${AWS_REGION:?}"
 
 app_directory=${APP_DIRECTORY:-/opt/wayfinder}
-staging_file=${DATA_DIRECTORY:-/var/lib/wayfinder}/backup-in-progress.dump
-backup_key="postgres/$(date -u +%Y-%m-%dT%H%M%SZ).dump"
+# The timestamp leads, so "latest" in restore-database.sh still sorts by time.
+backup_key="postgres/$(date -u +%Y-%m-%dT%H%M%SZ)${1:+-$1}.dump"
+data_directory=${DATA_DIRECTORY:-/var/lib/wayfinder}
+staging_file=$data_directory/backup-in-progress.dump
+
+# Backups take turns, so one fixed staging file serves them all and an interrupted one cannot pile up.
+exec {backup_lock}>"$data_directory/backup.lock"
+flock "$backup_lock"
 
 cd "$app_directory"
 trap 'rm -f "$staging_file"' EXIT

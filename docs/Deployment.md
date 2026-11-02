@@ -29,22 +29,34 @@ The uptime stack sits in us-east-1 because Route 53 publishes health check metri
 
 Merge to `main`. CI runs; if it passes, the **Deploy** workflow builds the web and API images
 (each skipped if that SHA already exists in ECR, since tags are immutable). It ships them with
-the compose files, `caddy/Caddyfile` and backup scripts from the same commit. The host reads the
-secrets from SSM into a root-only `.env`, installs the backup timer, and waits for every
-container's healthcheck, then runs `caddy reload`. A reload validates the new Caddyfile and
+the compose files, `caddy/Caddyfile` and the host scripts from the same commit. The host reads
+the secrets from SSM into a root-only `.env`, installs the backup timer, pulls the images and runs
+`host/release.sh`, then `caddy reload`. A reload validates the new Caddyfile and
 keeps serving the old config if it is invalid, which fails the deploy without dropping the site.
 Caddy mounts the `caddy/` directory rather than the file, because a single-file bind mount stays
 pinned to the copy a deploy replaces. The workflow then checks `/`, `/work`, `/sitemap.xml`, a 404, the
 HTTP→HTTPS redirect, `X-Robots-Tag` on `/admin`, and `/api/health` (`databaseReachable: true`)
 from outside, over the real certificate.
 
-Both images share one tag, the git SHA. If they never become healthy, the host restores the
-previous tag for both and the workflow fails. The site keeps serving the old version. A deploy
-refuses to start if the data volume is not mounted, so Postgres can never quietly write to the
-root disk.
+Both images share one tag, the git SHA. A deploy refuses to start if the data volume is not
+mounted, so Postgres can never quietly write to the root disk. `release.sh` then:
 
-Migrations do not run on deploy. Run them deliberately from a shell on the host (below):
-`docker compose run --rm api node main.js migrate:show`, then `migrate:run`.
+1. **Backs up** to `postgres/<timestamp>-pre-deploy-<sha>.dump` in the backup bucket, so there is
+   a restore point from just before every release. A failed backup stops the deploy.
+2. **Migrates with the new API image** (`node main.js migrate:run`) while the old containers
+   still serve. If a migration fails, it rolls itself back, any earlier ones from the same run are
+   reverted, and the deploy stops with the old release serving.
+3. **Switches** every container and waits for its healthcheck.
+4. **If the new release never becomes healthy,** it restores the previous images, then reverts
+   exactly the migrations it applied, still with the new image (only it has their `down`), and
+   fails the workflow. Images go first because the old API runs on the new schema, while the new
+   API would not run on the old one. The log says what it restored and reverted, and starts a
+   line with `ROLLBACK INCOMPLETE` if any part of that failed.
+
+This works because migrations expand before they contract
+([Code Quality](Code%20Quality.md#-expand-then-contract)): the previous images can always run on
+the schema the new release left. CI runs both failure paths against the compose stack on every PR,
+with a deliberately broken API image.
 
 ## Rolling back
 
@@ -54,6 +66,12 @@ image is already in ECR, so nothing is rebuilt. The last 20 images are kept. Fro
 ```bash
 gh workflow run Deploy -f sha=<full commit sha>
 ```
+
+That puts the old images back but leaves the schema as it is, which expand-then-contract makes
+safe. To undo a migration as well, revert it from a shell on the host **before** redeploying,
+while the newer image (the only one that knows its `down`) is still running:
+`docker compose run --rm api node main.js migrate:revert`, once per migration. For a data change
+no `down` can undo, restore the pre-deploy backup (below).
 
 ## Changing the infrastructure
 
@@ -93,7 +111,7 @@ Or the EC2 console → the instance → _Connect_ → _Session Manager_.
 
 | Watch                              | What happens                                                                                     |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Container healthchecks             | Gate every deploy; a failed rollout restores the previous image                                  |
+| Container healthchecks             | Gate every deploy; a failed release reverts its migrations and restores the previous images      |
 | System status check (AWS hardware) | Alarm **recovers** the instance onto new hardware, same ID, IP and disk; emails                  |
 | Instance status check (hung OS)    | Alarm **reboots** the instance; Docker restarts the containers; emails                           |
 | CPU credits below 20               | Emails. Standard credits mean the host slows down under load rather than billing for surplus CPU |
@@ -145,6 +163,8 @@ aws sns subscribe --profile wayfinder --region us-east-1 --protocol email \
 
 - **Backups** run nightly at 10:30 UTC: `pg_dump` to the data volume, checked with
   `pg_restore --list`, then uploaded to `s3://wayfinder-backups-742188596859/postgres/<timestamp>.dump`.
+  Every deploy adds one named `<timestamp>-pre-deploy-<sha>.dump`. `latest` skips those, since after a
+  lost volume the newest is of an empty database; restore one by its key.
   The bucket is private, SSL-only, versioned, and expires backups after 30 days. The host can
   write and read backups but not delete them.
 - **Restoring**, from a shell on the host:
@@ -156,6 +176,16 @@ aws sns subscribe --profile wayfinder --region us-east-1 --protocol email \
   docker compose stop api                               # before restoring over production:
   host/restore-database.sh latest wayfinder && docker compose start api
   ```
+
+- **The admin account** is created once, from a shell on the host, with the password typed at the
+  prompt so it never reaches history or a log:
+
+  ```bash
+  docker compose exec api node main.js create-admin --email <address>
+  docker compose exec api node main.js create-admin --email <address> --reset-password   # locked out
+  ```
+
+  A reset also signs out every session. The account survives deploys and restores like any row.
 
 ## Rebuilding from nothing
 
