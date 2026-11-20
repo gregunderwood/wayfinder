@@ -122,6 +122,9 @@ say what is happening, the order says why, and nothing needs a comment to be und
   not `if (Array.isArray(response.message))` with a comment above it.
 - **Name a magic value** as a constant: `MIGRATION_USAGE_ERROR_EXIT_CODE`, not `return 2`.
 - **Early returns over nesting.** Handle the unusual case first and get out.
+- **A pattern before a repeat.** Before writing similar code a second time, consider whether a
+  pattern (strategy, factory, a lookup table instead of a switch, a shared helper) removes the
+  repetition. Use the simplest one that does, and none where nothing repeats.
 
 ### Naming
 
@@ -137,9 +140,9 @@ const exceptionResponse = exception.getResponse();
 
 #### ❌ Don't abbreviate, and don't use placeholder names
 
-`db`, `cfg`, `res`, `err`, `m`, `raw`, `data`, `info`, `tmp`, `fields`. A one-letter name is
-acceptable only as a loop index or in a one-line arrow whose meaning is obvious from the
-collection: `projects.map((project) => project.slug)`, not `projects.map((p) => p.slug)`.
+`db`, `cfg`, `res`, `err`, `m`, `raw`, `data`, `info`, `tmp`, `fields`. Never use a one-letter
+name, including loop variables and one-line arrows: `projects.map((project) => project.slug)`,
+not `projects.map((p) => p.slug)`.
 
 #### ✅ Booleans read as a question
 
