@@ -72,8 +72,9 @@ See [docs/Code Quality.md](docs/Code%20Quality.md) for full details.
 
 See [docs/Code Quality.md](docs/Code%20Quality.md#code-reads-like-a-story) for full details.
 
-- **Code reads like a story.** Descriptive names (no `db`, `err`, `res`, `m`), small functions
-  at one level of detail, named constants and named conditions.
+- **Code reads like a story.** Descriptive names (no `db`, `err`, `res`, `m`), never a
+  single-letter name, small functions at one level of detail, named constants and named
+  conditions. Consider a pattern before repeating code.
 - **Comments are an absolute minimum**: only where the code cannot explain itself (an outside
   constraint, or a deliberate choice that looks like a bug). One line, saying why. This applies
   to YAML, Dockerfiles, the Caddyfile and scripts too.
